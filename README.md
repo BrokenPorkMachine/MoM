@@ -1,3 +1,7 @@
+# VolumeBoot — Disk images and console input
+
+**Managed VM → Disks** now creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable macOS installation/boot images. **Guest console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default). See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md). Run `Scripts/test-disk-images.sh` for disk and input policy regression tests.
+
 # MacOnMac v0.16.0 — Guest Tools v2
 
 This version extends v0.15.0 with manual host/guest clipboard offers, paired HMAC-authenticated ping/status requests, streamed file progress and SHA-256 receipts, network status diagnostics, and an opt-in per-user macOS guest-agent installer. It preserves VM NAT/optional bridging/VirtioFS and all earlier storage/VM work. Nothing here establishes direct boot of an existing physical macOS installation.

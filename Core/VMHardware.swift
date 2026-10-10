@@ -41,6 +41,26 @@ enum VMPointerKind: String, Codable, CaseIterable, Identifiable {
     var title: String { self == .trackpad ? "Multi-touch trackpad" : "USB pointing device" }
 }
 
+enum VMInputReleaseShortcut: String, Codable, CaseIterable, Identifiable {
+    case controlOptionEscape, controlCommandG, optionCommandG
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .controlOptionEscape: return "Control + Option + Escape"
+        case .controlCommandG: return "Control + Command + G"
+        case .optionCommandG: return "Option + Command + G"
+        }
+    }
+    func matches(keyCode: UInt16, control: Bool, option: Bool, command: Bool, shift: Bool) -> Bool {
+        guard !shift else { return false }
+        switch self {
+        case .controlOptionEscape: return keyCode == 53 && control && option && !command
+        case .controlCommandG: return keyCode == 5 && control && command && !option
+        case .optionCommandG: return keyCode == 5 && option && command && !control
+        }
+    }
+}
+
 struct VMAdditionalDisk: Codable, Equatable, Identifiable {
     var id = UUID()
     var path: String
@@ -61,9 +81,42 @@ struct VMHardwareSettings: Codable, Equatable {
     var keyboard: VMKeyboardKind = .mac
     var pointer: VMPointerKind = .trackpad
     var capturesSystemKeys = true
+    var capturesMouseOnClick = true
+    var inputReleaseShortcut: VMInputReleaseShortcut = .controlOptionEscape
+    /// Nil preserves the boot disk location used by older VM bundles.
+    var bootDiskPath: String?
     var additionalDisks: [VMAdditionalDisk] = []
 
     static let `default` = VMHardwareSettings()
+
+    init() {}
+    private enum CodingKeys: String, CodingKey {
+        case version, displayName, cpuCount, memoryGiB, display, automaticallyResizeDisplay
+        case audioOutputEnabled, microphoneEnabled, keyboard, pointer, capturesSystemKeys
+        case capturesMouseOnClick, inputReleaseShortcut, bootDiskPath, additionalDisks
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        displayName = try values.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        cpuCount = try values.decodeIfPresent(Int.self, forKey: .cpuCount) ?? 2
+        memoryGiB = try values.decodeIfPresent(Int.self, forKey: .memoryGiB) ?? 4
+        display = try values.decodeIfPresent(VMDisplayPreset.self, forKey: .display) ?? .compact
+        automaticallyResizeDisplay = try values.decodeIfPresent(Bool.self, forKey: .automaticallyResizeDisplay) ?? true
+        audioOutputEnabled = try values.decodeIfPresent(Bool.self, forKey: .audioOutputEnabled) ?? true
+        microphoneEnabled = try values.decodeIfPresent(Bool.self, forKey: .microphoneEnabled) ?? false
+        keyboard = try values.decodeIfPresent(VMKeyboardKind.self, forKey: .keyboard) ?? .mac
+        pointer = try values.decodeIfPresent(VMPointerKind.self, forKey: .pointer) ?? .trackpad
+        capturesSystemKeys = try values.decodeIfPresent(Bool.self, forKey: .capturesSystemKeys) ?? true
+        capturesMouseOnClick = try values.decodeIfPresent(Bool.self, forKey: .capturesMouseOnClick) ?? true
+        inputReleaseShortcut = try values.decodeIfPresent(VMInputReleaseShortcut.self, forKey: .inputReleaseShortcut) ?? .controlOptionEscape
+        bootDiskPath = try values.decodeIfPresent(String.self, forKey: .bootDiskPath)
+        additionalDisks = try values.decodeIfPresent([VMAdditionalDisk].self, forKey: .additionalDisks) ?? []
+    }
+
+    func bootDiskURL(in folder: URL) -> URL {
+        bootDiskPath.map { URL(fileURLWithPath: $0) } ?? folder.appendingPathComponent("disk.img")
+    }
 }
 
 enum VMHardwareError: LocalizedError {
@@ -96,7 +149,18 @@ enum VMHardwarePolicy {
         }
         guard settings.additionalDisks.count <= 8 else { throw VMHardwareError.tooManyDisks }
         let bundle = vmFolder.standardizedFileURL.resolvingSymlinksInPath().path
-        var paths = Set<String>()
+        var identities = Set<String>()
+        let bootURL = settings.bootDiskURL(in: vmFolder)
+        if let bootPath = settings.bootDiskPath {
+            guard bootPath.hasPrefix("/"), !bootPath.hasPrefix(bundle + "/") else { throw VMHardwareError.protectedDisk }
+            let boot = try VMDiskImageStore.inspect(at: bootURL)
+            guard boot.sizeBytes >= 64 * VMDiskImageStore.gibibyte else { throw VMDiskImageError.invalidSize }
+            identities.insert(boot.identity)
+        } else if FileManager.default.fileExists(atPath: bootURL.path) {
+            let boot = try VMDiskImageStore.inspect(at: bootURL)
+            guard boot.sizeBytes >= 64 * VMDiskImageStore.gibibyte else { throw VMDiskImageError.invalidSize }
+            identities.insert(boot.identity)
+        }
         for disk in settings.additionalDisks {
             guard disk.path.hasPrefix("/") else { throw VMHardwareError.invalidDisk(disk.path) }
             let url = URL(fileURLWithPath: disk.path).standardizedFileURL.resolvingSymlinksInPath()
@@ -107,7 +171,8 @@ enum VMHardwarePolicy {
                   (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
                 throw VMHardwareError.invalidDisk(disk.path)
             }
-            guard paths.insert(url.path).inserted else { throw VMHardwareError.duplicateDisk }
+            let image = try VMDiskImageStore.inspect(at: URL(fileURLWithPath: disk.path))
+            guard identities.insert(image.identity).inserted else { throw VMHardwareError.duplicateDisk }
         }
     }
 }

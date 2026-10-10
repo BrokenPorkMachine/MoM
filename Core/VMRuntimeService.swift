@@ -22,10 +22,14 @@ final class VMRuntimeService {
     var installationProgress: Double { installer?.progress.fractionCompleted ?? 0 }
     private(set) var currentFolder: URL?
     private var physicalDiskLease: ReadOnlyPhysicalDiskLease?
+    private var imageLeases: [VMDiskImageLease] = []
+    private(set) var operationInProgress = false
 
     func startExistingVM(at folder: URL, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
         #if arch(arm64)
-        guard virtualMachine == nil else { throw RuntimeError.busy }
+        guard virtualMachine == nil, !operationInProgress else { throw RuntimeError.busy }
+        operationInProgress = true
+        defer { operationInProgress = false }
         let manifest = try VMRegistry.read(at: folder)
         guard manifest.state == .installed else { throw RuntimeError.incompleteInstallation }
         let connectivity = try VMConnectivityStore.load(from: folder)
@@ -34,12 +38,16 @@ final class VMRuntimeService {
         try VMHardwarePolicy.verify(hardware, vmFolder: folder,
             cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
+        let leases = try lockImages(folder: folder, hardware: hardware)
         let config = try makeConfiguration(folder: folder, hardware: hardware, readOnlyDisk: readOnlyDisk)
         let vm = VZVirtualMachine(configuration: config)
         virtualMachine = vm
         physicalDiskLease = readOnlyDisk
         currentFolder = folder
-        do { try await vm.start() } catch { virtualMachine = nil; physicalDiskLease = nil; currentFolder = nil; throw error }
+        imageLeases = leases
+        do { try await vm.start() } catch {
+            virtualMachine = nil; physicalDiskLease = nil; currentFolder = nil; imageLeases = []; throw error
+        }
         #else
         throw RuntimeError.unsupportedHost
         #endif
@@ -53,6 +61,7 @@ final class VMRuntimeService {
         virtualMachine = nil
         physicalDiskLease = nil
         currentFolder = nil
+        imageLeases = []
         return true
     }
 
@@ -62,8 +71,17 @@ final class VMRuntimeService {
         self.virtualMachine = nil
         physicalDiskLease = nil
         currentFolder = nil
+        imageLeases = []
     }
     #if arch(arm64)
+    private func lockImages(folder: URL, hardware: VMHardwareSettings) throws -> [VMDiskImageLease] {
+        var leases = [try VMDiskImageLease(url: hardware.bootDiskURL(in: folder), writable: true)]
+        for disk in hardware.additionalDisks {
+            leases.append(try VMDiskImageLease(url: URL(fileURLWithPath: disk.path), writable: !disk.readOnly))
+        }
+        return leases
+    }
+
     private func makeConfiguration(folder: URL, hardware: VMHardwareSettings, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) throws -> VZVirtualMachineConfiguration {
         func file(_ name: String) throws -> URL {
             let url = folder.appendingPathComponent(name)
@@ -85,7 +103,7 @@ final class VMRuntimeService {
         config.bootLoader = VZMacOSBootLoader()
         config.cpuCount = hardware.cpuCount
         config.memorySize = UInt64(hardware.memoryGiB) * 1_073_741_824
-        let attachment = try VZDiskImageStorageDeviceAttachment(url: try file("disk.img"), readOnly: false)
+        let attachment = try VZDiskImageStorageDeviceAttachment(url: hardware.bootDiskURL(in: folder), readOnly: false)
         config.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: attachment)]
         for disk in hardware.additionalDisks {
             let image = try VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: disk.path), readOnly: disk.readOnly)
@@ -165,12 +183,21 @@ final class VMRuntimeService {
     func provision(at folder: URL, restoreImageURL: URL, diskSizeGiB: Int, connectivity: VMConnectivitySettings = .default,
                    hardware: VMHardwareSettings = .default) async throws {
         #if arch(arm64)
-        guard virtualMachine == nil else { throw RuntimeError.busy }
-        guard folder.isFileURL && !folder.path.hasPrefix("/dev/") && folder.lastPathComponent != "" else { throw RuntimeError.unsafeDestination }
+        guard virtualMachine == nil, !operationInProgress else { throw RuntimeError.busy }
+        operationInProgress = true
+        defer { operationInProgress = false }
+        let resolvedFolder = folder.standardizedFileURL.resolvingSymlinksInPath()
+        guard folder.isFileURL, resolvedFolder.path != "/dev", !resolvedFolder.path.hasPrefix("/dev/"),
+              resolvedFolder.path == folder.standardizedFileURL.path, folder.lastPathComponent != "" else { throw RuntimeError.unsafeDestination }
         guard restoreImageURL.isFileURL, restoreImageURL.pathExtension.lowercased() == "ipsw" else {
             throw ProvisioningError.invalidRestoreImage
         }
-        guard diskSizeGiB >= 64 && diskSizeGiB <= 2048 else { throw ProvisioningError.invalidDiskSize }
+        _ = try VMDiskImageStore.capacityBytes(diskSizeGiB, bootDisk: true)
+        try VMHardwarePolicy.verify(hardware, vmFolder: folder,
+            cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
+            maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
+        // Lock a supplied installation target before awaiting restore-image inspection.
+        let suppliedDisk = try hardware.bootDiskPath.map { try VMDiskImageLease(url: URL(fileURLWithPath: $0), writable: true) }
         try VMConnectivityPolicy.verify(connectivity, vmFolder: folder,
             validInterfaces: Set(VZBridgedNetworkInterface.networkInterfaces.map(\.identifier)))
         guard !FileManager.default.fileExists(atPath: folder.path) else { throw ProvisioningError.destinationExists }
@@ -186,7 +213,8 @@ final class VMRuntimeService {
         }
         // Exclusive creation: never adopt or overwrite an existing folder.
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
-        var manifest = ManagedVMManifest(version: 2, id: UUID(), createdAt: Date(), diskSizeGiB: diskSizeGiB, state: .provisioning, lastFailure: nil)
+        let capacity = suppliedDisk.map { Int($0.info.sizeBytes / VMDiskImageStore.gibibyte) } ?? diskSizeGiB
+        var manifest = ManagedVMManifest(version: 2, id: UUID(), createdAt: Date(), diskSizeGiB: capacity, state: .provisioning, lastFailure: nil)
         try VMRegistry.write(manifest, at: folder)
         do {
             try VMConnectivityStore.save(connectivity, to: folder)
@@ -203,19 +231,22 @@ final class VMRuntimeService {
                 hardwareModel: model,
                 options: []
             )
-            let diskURL = folder.appendingPathComponent("disk.img")
-            guard FileManager.default.createFile(atPath: diskURL.path, contents: nil) else {
-                throw ProvisioningError.diskCreationFailed
+            if suppliedDisk == nil {
+                try VMDiskImageStore.create(at: folder.appendingPathComponent("disk.img"), sizeGiB: diskSizeGiB)
             }
-            let handle = try FileHandle(forWritingTo: diskURL)
-            defer { try? handle.close() }
-            try handle.truncate(atOffset: UInt64(diskSizeGiB) * 1_073_741_824)
+            let bootLease = try suppliedDisk ?? VMDiskImageLease(url: hardware.bootDiskURL(in: folder), writable: true)
+            var leases = [bootLease]
+            for disk in hardware.additionalDisks {
+                leases.append(try VMDiskImageLease(url: URL(fileURLWithPath: disk.path), writable: !disk.readOnly))
+            }
             let config = try makeConfiguration(folder: folder, hardware: hardware)
             let vm = VZVirtualMachine(configuration: config)
             virtualMachine = vm
-            let macInstaller = VZMacOSInstaller(virtualMachine: vm, restoringFrom: restoreImageURL)
+            currentFolder = folder
+            imageLeases = leases
+            let macInstaller = VZMacOSInstaller(virtualMachine: vm, restoringFromImageAt: restoreImageURL)
             installer = macInstaller
-            defer { installer = nil; virtualMachine = nil }
+            defer { installer = nil; virtualMachine = nil; currentFolder = nil; imageLeases = [] }
             try await macInstaller.install()
             manifest.state = .installed
             try VMRegistry.write(manifest, at: folder)
@@ -229,37 +260,6 @@ final class VMRuntimeService {
         #else
         throw RuntimeError.unsupportedHost
         #endif
-    }
-}
-
-enum VMInstallState: String, Codable { case provisioning, installed, failed }
-
-struct ManagedVMManifest: Codable, Identifiable {
-    let version: Int
-    let id: UUID
-    let createdAt: Date
-    let diskSizeGiB: Int
-    var state: VMInstallState
-    var lastFailure: String?
-}
-
-enum VMRegistry {
-    static func read(at folder: URL) throws -> ManagedVMManifest {
-        try JSONDecoder().decode(ManagedVMManifest.self, from: Data(contentsOf: folder.appendingPathComponent("manifest.json")))
-    }
-    static func write(_ manifest: ManagedVMManifest, at folder: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(manifest).write(to: folder.appendingPathComponent("manifest.json"), options: .atomic)
-    }
-    /// Enumerates only immediate child bundles of a user-selected parent directory.
-    static func discover(in directory: URL) -> [(url: URL, record: ManagedVMManifest)] {
-        guard let children = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else { return [] }
-        return children.compactMap { url in
-            guard (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
-                  let record = try? read(at: url) else { return nil }
-            return (url: url, record: record)
-        }.sorted { $0.record.createdAt > $1.record.createdAt }
     }
 }
 

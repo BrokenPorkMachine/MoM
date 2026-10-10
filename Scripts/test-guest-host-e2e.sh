@@ -32,5 +32,6 @@ VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" clipboard-peek | grep -q 
 VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" clipboard-send 'guest clipboard demo' > /dev/null
 "$TEMP/host-tool" "$VM" clipboard-peek | grep -q 'guest clipboard demo'
 "$TEMP/host-tool" "$VM" diagnose | grep -q 'Authenticated responses: 1'
-test -f "$VM/Exchange/host-files/$(find "$VM/Exchange/host-files" -maxdepth 1 -name '*.transfer.json' -printf '%f\n' | head -1)"
+TRANSFER_RECEIPT="$(find "$VM/Exchange/host-files" -type f -name '*.transfer.json' -print | head -1)"
+test -n "$TRANSFER_RECEIPT" && test -f "$TRANSFER_RECEIPT"
 echo 'PASS: agent heartbeat, signed request/reply, clipboard offers, messages, staged files and receipts' 

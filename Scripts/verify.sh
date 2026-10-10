@@ -7,6 +7,7 @@ plutil -lint Resources/Info.plist Resources/VolumeBoot.entitlements Resources/La
 ./Scripts/test-grant-policy.sh
 ./Scripts/test-topology-proof.sh
 ./Scripts/test-connectivity.sh
+./Scripts/test-disk-images.sh
 ./Scripts/test-guest-host-e2e.sh
 ./Scripts/test-guest-tools-v2.sh
 ./Scripts/build-claim-lab.sh

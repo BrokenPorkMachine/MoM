@@ -142,8 +142,11 @@ struct DashboardView: View {
             Picker("VM workspace", selection: $selectedVMSection) {
                 Text("Overview").tag(0)
                 Text("Hardware").tag(1)
+                Text("Disks").tag(2)
             }.pickerStyle(.segmented).frame(maxWidth: 320)
-            if selectedVMSection == 0 { vmOverview } else { hardwareConfiguration }
+            if selectedVMSection == 0 { vmOverview }
+            else if selectedVMSection == 1 { hardwareConfiguration }
+            else { VMDiskImagesView() }
         }
     }
 
@@ -155,9 +158,9 @@ struct DashboardView: View {
                     let panel = NSOpenPanel()
                     panel.canChooseDirectories = true
                     panel.canChooseFiles = false
-                    if panel.runModal() == .OK { model.vmFolderPath = panel.url?.path ?? "" }
+                    if panel.runModal() == .OK, let url = panel.url { model.loadHardwareProfile(for: url) }
                 }
-            }
+            }.disabled(model.isVMInUse)
             HStack {
                 TextField("Apple macOS restore image (.ipsw)", text: $model.restoreImagePath)
                 Button("Choose IPSW…") {
@@ -168,7 +171,12 @@ struct DashboardView: View {
                     if panel.runModal() == .OK { model.restoreImagePath = panel.url?.path ?? "" }
                 }
             }
-            Stepper("Virtual disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...512, step: 16)
+            Stepper("New boot disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...2048, step: 16)
+                .disabled(model.isVMInUse || model.hardware.bootDiskPath != nil)
+            if let path = model.hardware.bootDiskPath {
+                Text("Installation target: \(path)").font(.caption).textSelection(.enabled)
+            }
+            Button("Manage disk images") { selectedVMSection = 2 }
             HStack(spacing: 12) {
                 Label("\(model.hardware.cpuCount) CPU cores", systemImage: "cpu")
                 Label("\(model.hardware.memoryGiB) GiB memory", systemImage: "memorychip")
@@ -178,11 +186,12 @@ struct DashboardView: View {
             Text("Requires signed and approved root daemon. Only disposable, unmounted, unpartitioned external disks are accepted. The selected physical disk is NEVER the VM boot disk.")
                 .font(.caption).foregroundStyle(.orange)
             HStack {
-                Button("Install macOS") { Task { await model.provisionVM() } }
-                    .disabled(model.provisioning || model.vmFolderPath.isEmpty || model.restoreImagePath.isEmpty)
+                Button("Install macOS") { installMacOS() }
+                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty || model.restoreImagePath.isEmpty)
                 Button("Start VM") { Task { await model.bootManagedVM() } }
-                    .disabled(model.provisioning || model.vmFolderPath.isEmpty)
-                Button("Stop") { Task { await model.stopVM() } }.disabled(model.provisioning)
+                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
+                Button("Stop") { Task { await model.stopVM() } }
+                    .disabled(model.provisioning || model.vmOperationInProgress || model.vm.virtualMachine == nil)
             }
             if model.provisioning {
                 ProgressView(value: min(max(model.installProgress, 0), 1)) {
@@ -207,6 +216,7 @@ struct DashboardView: View {
                             }
                             Spacer()
                             Button("Select") { model.loadHardwareProfile(for: entry.url) }
+                                .disabled(model.isVMInUse)
                         }
                     }
                 }
@@ -316,6 +326,12 @@ struct DashboardView: View {
                             ForEach(VMPointerKind.allCases) { kind in Text(kind.title).tag(kind) }
                         }
                         Toggle("Capture system shortcuts in the VM", isOn: $model.hardware.capturesSystemKeys)
+                        Toggle("Capture mouse when clicking the guest console", isOn: $model.hardware.capturesMouseOnClick)
+                        Picker("Release mouse and keyboard", selection: $model.hardware.inputReleaseShortcut) {
+                            ForEach(VMInputReleaseShortcut.allCases) { Text($0.title).tag($0) }
+                        }
+                        Text("The release hotkey always stays on the host. Input also releases when the app or VM window loses focus.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }.padding(4)
                 }
                 GroupBox {
@@ -338,9 +354,10 @@ struct DashboardView: View {
                                     }
                                     Spacer()
                                     Toggle("Read only", isOn: $disk.readOnly).toggleStyle(.switch)
-                                    Button(role: .destructive) { model.hardware.additionalDisks.removeAll { $0.id == disk.id } } label: {
-                                        Image(systemName: "trash")
+                                    Button { model.detachDiskImage(disk) } label: {
+                                        Image(systemName: "minus.circle")
                                     }.buttonStyle(.borderless)
+                                        .help("Detach image without deleting the file")
                                 }.padding(10).background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
                             }
                         }
@@ -361,6 +378,7 @@ struct DashboardView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             .padding(.bottom, 12)
+            .disabled(model.isVMInUse)
         }
     }
 
@@ -392,8 +410,21 @@ struct DashboardView: View {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
-            model.hardware.additionalDisks.append(VMAdditionalDisk(path: url.path))
+            model.selectDiskImage(url, asBootDisk: false)
         }
+    }
+
+    private func installMacOS() {
+        if let path = model.hardware.bootDiskPath {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Install macOS into the selected disk image?"
+            alert.informativeText = "Installation can erase all existing data in this image:\n\n\(path)"
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Install macOS")
+            guard alert.runModal() == .alertSecondButtonReturn else { return }
+        }
+        Task { await model.provisionVM() }
     }
 
     private var connectivityView: some View {

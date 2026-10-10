@@ -20,6 +20,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var knownVMs: [(url: URL, record: ManagedVMManifest)] = []
     @Published private(set) var vmRevision = 0
     @Published private(set) var vmStatus = "No VM loaded"
+    @Published private(set) var vmOperationInProgress = false
+    @Published private(set) var diskImageStatus = "Choose a VM folder to manage its disk images"
+    @Published private(set) var diskRevision = 0
     @Published var hardware = VMHardwareSettings.default
     @Published private(set) var hardwareStatus = "Choose a VM to edit its hardware"
     @Published private(set) var hardwareLoaded = false
@@ -57,6 +60,7 @@ final class AppModel: ObservableObject {
     }
 
     func loadConnectivity() {
+        guard !isVMInUse else { connectivityStatus = "Stop the VM before selecting another profile"; return }
         guard vmFolderPath.hasPrefix("/") else { connectivityStatus = "Choose a VM folder"; return }
         do {
             hardware = try VMHardwareStore.load(from: URL(fileURLWithPath: vmFolderPath))
@@ -70,7 +74,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveHardware() {
-        guard vm.virtualMachine == nil, !provisioning else { hardwareStatus = "Stop the VM before changing virtual hardware"; return }
+        guard !isVMInUse else { hardwareStatus = "Stop the VM before changing virtual hardware"; return }
         guard vmFolderPath.hasPrefix("/") else { hardwareStatus = "Choose an installed VM folder"; return }
         let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
@@ -87,6 +91,7 @@ final class AppModel: ObservableObject {
     }
 
     func loadHardwareProfile(for folder: URL) {
+        guard !isVMInUse else { hardwareStatus = "Stop the VM before selecting another instance"; return }
         vmFolderPath = folder.path
         do {
             hardware = try VMHardwareStore.load(from: folder)
@@ -100,7 +105,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveConnectivity() {
-        guard vm.virtualMachine == nil, !provisioning else { connectivityStatus = "Stop the VM before changing virtual devices"; return }
+        guard !isVMInUse else { connectivityStatus = "Stop the VM before changing virtual devices"; return }
         guard vmFolderPath.hasPrefix("/") else { connectivityStatus = "Choose a VM folder"; return }
         let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
@@ -144,19 +149,20 @@ final class AppModel: ObservableObject {
         transferProgress = 0
         let root = HostGuestExchange.root(for: URL(fileURLWithPath: vmFolderPath))
         Task.detached(priority: .utility) { [weak self] in
+            guard let model = self else { return }
             do {
                 let receipt = try VBGuestToolsTransport.stageFile(url, origin: "host", root: root) { fraction in
-                    Task { @MainActor [weak self] in self?.transferProgress = fraction }
+                    Task { @MainActor [weak model] in model?.transferProgress = fraction }
                 }
                 await MainActor.run {
-                    self?.transferInProgress = false
-                    self?.transferProgress = 1
-                    self?.exchangeStatus = "Staged \(receipt.originalName) (SHA-256 \(receipt.sha256.prefix(12))…)"
+                    model.transferInProgress = false
+                    model.transferProgress = 1
+                    model.exchangeStatus = "Staged \(receipt.originalName) (SHA-256 \(receipt.sha256.prefix(12))…)"
                 }
             } catch {
                 await MainActor.run {
-                    self?.transferInProgress = false
-                    self?.exchangeStatus = "File staging failed: \(error.localizedDescription)"
+                    model.transferInProgress = false
+                    model.exchangeStatus = "File staging failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -282,6 +288,9 @@ final class AppModel: ObservableObject {
     }
 
     func bootManagedVM() async {
+        guard !isVMInUse else { vmStatus = "Stop the current VM before starting another"; return }
+        vmOperationInProgress = true
+        defer { vmOperationInProgress = false }
         guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an absolute VM folder path"; return }
         let url = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
@@ -306,6 +315,9 @@ final class AppModel: ObservableObject {
     }
 
     func stopVM() async {
+        guard !provisioning, !vmOperationInProgress else { return }
+        vmOperationInProgress = true
+        defer { vmOperationInProgress = false }
         do {
             if !vm.discardAlreadyStoppedSession() { try await vm.stop() }
             activeDiskGrant?.releaseAfterVMStops()
@@ -322,7 +334,7 @@ final class AppModel: ObservableObject {
     }
 
     func provisionVM() async {
-        guard !provisioning else { return }
+        guard !isVMInUse else { return }
         guard vmFolderPath.hasPrefix("/"), restoreImagePath.hasPrefix("/") else {
             vmStatus = "Choose a destination folder path and local IPSW"; return
         }
@@ -348,6 +360,105 @@ final class AppModel: ObservableObject {
             installProgress = 1
             vmStatus = "Installation completed. Start the managed VM to boot macOS."
         } catch { vmStatus = "Installation failed: \(error.localizedDescription). Incomplete VM data was retained." }
+    }
+
+    var isVMInUse: Bool { provisioning || vmOperationInProgress || vm.operationInProgress || vm.virtualMachine != nil }
+
+    private func updateDiskSelection(_ update: (inout VMHardwareSettings) -> Void) throws {
+        guard !isVMInUse else { throw VMDiskImageError.inUse }
+        guard vmFolderPath.hasPrefix("/") else { throw VMHardwareError.invalidFolder }
+        var next = hardware
+        update(&next)
+        let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
+        try VMHardwarePolicy.verify(next, vmFolder: folder)
+        if FileManager.default.fileExists(atPath: folder.appendingPathComponent("manifest.json").path) {
+            // Persist disk choices without silently saving other hardware edits.
+            var saved = try VMHardwareStore.load(from: folder)
+            saved.bootDiskPath = next.bootDiskPath
+            saved.additionalDisks = next.additionalDisks
+            try VMHardwareStore.save(saved, to: folder)
+        }
+        hardware = next
+        diskRevision += 1
+    }
+
+    func selectDiskImage(_ url: URL, asBootDisk: Bool) {
+        do {
+            let image = try VMDiskImageStore.inspect(at: url)
+            try updateDiskSelection { settings in
+                if asBootDisk {
+                    let defaultDisk = URL(fileURLWithPath: vmFolderPath).appendingPathComponent("disk.img").standardizedFileURL
+                    settings.bootDiskPath = image.url == defaultDisk ? nil : image.url.path
+                }
+                else { settings.additionalDisks.append(VMAdditionalDisk(path: image.url.path)) }
+            }
+            diskImageStatus = asBootDisk ? "Boot image selected. Use matching VM identity files to run an existing macOS installation." : "Secondary image attached for the next boot"
+        } catch { diskImageStatus = "Selection failed: \(error.localizedDescription)" }
+    }
+
+    func useBundleBootDisk() {
+        do {
+            try updateDiskSelection { $0.bootDiskPath = nil }
+            diskImageStatus = "Using disk.img in the VM folder"
+        } catch { diskImageStatus = "Selection failed: \(error.localizedDescription)" }
+    }
+
+    func detachDiskImage(_ disk: VMAdditionalDisk) {
+        do {
+            try updateDiskSelection { $0.additionalDisks.removeAll { $0.id == disk.id } }
+            diskImageStatus = "Image detached; the file remains on disk"
+        } catch { diskImageStatus = "Detach failed: \(error.localizedDescription)" }
+    }
+
+    func createDiskImage(at url: URL, sizeGiB: Int, asBootDisk: Bool) {
+        guard !isVMInUse else { diskImageStatus = VMDiskImageError.inUse.localizedDescription; return }
+        do {
+            _ = try VMDiskImageStore.capacityBytes(sizeGiB, bootDisk: asBootDisk)
+            try VMDiskImageStore.create(at: url, sizeGiB: sizeGiB)
+            selectDiskImage(url, asBootDisk: asBootDisk)
+            diskImageStatus = "Created \(sizeGiB) GiB image. \(diskImageStatus)"
+        } catch { diskImageStatus = "Creation failed: \(error.localizedDescription)" }
+        diskRevision += 1
+    }
+
+    func growDiskImage(at url: URL, toGiB sizeGiB: Int) {
+        guard !isVMInUse else { diskImageStatus = VMDiskImageError.inUse.localizedDescription; return }
+        do {
+            let image = try VMDiskImageStore.grow(at: url, toGiB: sizeGiB)
+            let folder = URL(fileURLWithPath: vmFolderPath)
+            if hardware.bootDiskURL(in: folder).standardizedFileURL == image.url,
+               var manifest = try? VMRegistry.read(at: folder) {
+                manifest.diskSizeGiB = sizeGiB
+                try VMRegistry.write(manifest, at: folder)
+                refreshManagedVMs()
+            }
+            diskImageStatus = "Image grown to \(sizeGiB) GiB. Expand the partition and APFS container inside macOS to use the new space."
+        } catch { diskImageStatus = "Resize failed: \(error.localizedDescription)" }
+        diskRevision += 1
+    }
+
+    func deleteDiskImage(at url: URL) {
+        guard !isVMInUse else { diskImageStatus = VMDiskImageError.inUse.localizedDescription; return }
+        do {
+            let lease = try VMDiskImageLease(url: url)
+            let isBootDisk = hardware.bootDiskURL(in: URL(fileURLWithPath: vmFolderPath)).standardizedFileURL == lease.info.url
+            let previous = hardware
+            if !isBootDisk {
+                // Persist detachment before deletion, while keeping the file locked.
+                try updateDiskSelection { $0.additionalDisks.removeAll { URL(fileURLWithPath: $0.path).standardizedFileURL == lease.info.url } }
+            }
+            do { try VMDiskImageStore.delete(lease) }
+            catch {
+                if !isBootDisk { try? updateDiskSelection { $0 = previous } }
+                throw error
+            }
+            diskRevision += 1
+            diskImageStatus = "Deleted \(url.lastPathComponent)"
+            // Keep a missing boot-image reference visible; never switch boot disks implicitly.
+            if isBootDisk {
+                diskImageStatus += ". Select a replacement boot image before starting this VM."
+            }
+        } catch { diskImageStatus = "Disk operation failed: \(error.localizedDescription)" }
     }
 
 }
