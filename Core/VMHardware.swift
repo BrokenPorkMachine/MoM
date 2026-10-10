@@ -44,7 +44,7 @@ enum VMPointerKind: String, Codable, CaseIterable, Identifiable {
 struct VMAdditionalDisk: Codable, Equatable, Identifiable {
     var id = UUID()
     var path: String
-    var readOnly = true
+    var readOnly = false
 }
 
 /// Mutable virtual hardware belongs to a VM, independently of its immutable Mac identity.

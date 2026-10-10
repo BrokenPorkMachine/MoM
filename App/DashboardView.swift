@@ -321,7 +321,7 @@ struct DashboardView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 13) {
                         HStack {
-                            sectionHeading("Additional disk images", subtitle: "Attach .img or .raw files as secondary virtual drives")
+                            sectionHeading("Additional disk images", subtitle: "Attach .img or .raw files as writable secondary drives")
                             Spacer()
                             Button { addHardwareDisk() } label: { Label("Add disk", systemImage: "plus") }
                         }
@@ -337,7 +337,7 @@ struct DashboardView: View {
                                         Text(disk.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                                     }
                                     Spacer()
-                                    Toggle("Read only", isOn: $disk.readOnly).toggleStyle(.switch).labelsHidden()
+                                    Toggle("Read only", isOn: $disk.readOnly).toggleStyle(.switch)
                                     Button(role: .destructive) { model.hardware.additionalDisks.removeAll { $0.id == disk.id } } label: {
                                         Image(systemName: "trash")
                                     }.buttonStyle(.borderless)
