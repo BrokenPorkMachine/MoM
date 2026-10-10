@@ -13,7 +13,8 @@ struct ARMGuestTests {
             do { try operation(); fatalError("Expected rejection: \(message)") } catch { count += 1 }
         }
         let fm = FileManager.default
-        let scratch = URL(fileURLWithPath: "/private/tmp").appendingPathComponent("VB-ARM-\(UUID())")
+        let testRoot = ProcessInfo.processInfo.environment["VOLUMEBOOT_ARM_TEST_ROOT"] ?? "/private/tmp"
+        let scratch = URL(fileURLWithPath: testRoot).appendingPathComponent("VB-ARM-\(UUID())")
         try fm.createDirectory(at: scratch, withIntermediateDirectories: false)
         defer { try? fm.removeItem(at: scratch) }
         // Synthetic media validates host configuration; it is never claimed to contain an OS.
@@ -37,12 +38,23 @@ struct ARMGuestTests {
         check(fm.fileExists(atPath: linux.appendingPathComponent("efi-vars.bin").path), "Linux persistent EFI variables")
         let identity = try Data(contentsOf: linux.appendingPathComponent("machine-id.bin"))
         check(VZGenericMachineIdentifier(dataRepresentation: identity) != nil, "valid Linux platform identity")
+        try await runtime.startExistingVM(at: linux)
+        check(runtime.virtualMachine?.state == .running, "native Linux EFI VM starts")
+        rejects({ try runtime.finishARMInstallation(at: linux) }, "cannot eject installer while running")
+        rejects({ try VMDiskImageStore.grow(at: hardware.bootDiskURL(in: linux), toGiB: 80) }, "live Linux disk locked")
+        try await runtime.stop()
+        check(!runtime.hasSession, "native Linux shutdown")
         rejects({ try runtime.createARMGuest(at: linux, guestOS: .linuxARM, installationMediaURL: iso, diskSizeGiB: 64,
                                              connectivity: .default, hardware: hardware) }, "existing bundle untouched")
         try runtime.finishARMInstallation(at: linux)
-        let installedLinux = try VMRegistry.read(at: linux)
+        var installedLinux = try VMRegistry.read(at: linux)
         check(installedLinux.state == .installed, "explicit Linux completion")
         rejects({ try runtime.finishARMInstallation(at: linux) }, "no implicit repeat completion")
+        installedLinux.installationMediaPath = scratch.appendingPathComponent("removed-installer.iso").path
+        try VMRegistry.write(installedLinux, at: linux)
+        try await runtime.startExistingVM(at: linux)
+        check(runtime.virtualMachine?.state == .running, "installed Linux boots after installer media is removed")
+        try await runtime.stop()
         let tools = try VMQEMUSettings.discover()
         let windows = scratch.appendingPathComponent("Windows with spaces,comma")
         try runtime.createARMGuest(at: windows, guestOS: .windowsARM, installationMediaURL: iso, diskSizeGiB: 64,
@@ -51,8 +63,14 @@ struct ARMGuestTests {
             firmwareVariablesURL: tools.firmware(named: "edk2-arm-vars.fd"))
         var windowsRecord = try VMRegistry.read(at: windows)
         check(windowsRecord.guestOS == .windowsARM && windowsRecord.state == .installing, "Windows installation state")
+        let secondary = scratch.appendingPathComponent("Read only,secondary.img")
+        try VMDiskImageStore.create(at: secondary, sizeGiB: 1)
+        hardware.additionalDisks = [VMAdditionalDisk(path: secondary.path, readOnly: true)]
+        try VMHardwareStore.save(hardware, to: windows)
         let args = try VMQEMUPlan.arguments(folder: windows, record: windowsRecord, hardware: hardware,
             connectivity: .default, tpmSocket: scratch.appendingPathComponent("tpm.sock"), accelerator: "tcg", display: "none")
+        check(args.contains("Windows with spaces,,comma"), "QEMU name escapes commas")
+        check(args.contains(where: { $0.contains("highmem=on") }), "Windows supports four or more GiB of RAM")
         check(args.contains("tpm-tis-device,tpmdev=tpm0"), "TPM 2.0 device")
         check(args.contains("nvme,drive=bootdisk,serial=VolumeBootMain,bootindex=1"), "Windows inbox NVMe disk")
         check(args.contains(where: { $0.contains("drive=installer") }), "install media attached")
@@ -69,7 +87,7 @@ struct ARMGuestTests {
         let service = VMQEMUService()
         let bootURL = hardware.bootDiskURL(in: windows)
         try await service.start(folder: windows, record: windowsRecord, hardware: hardware, connectivity: .default,
-            leases: [try VMDiskImageLease(url: bootURL, writable: true)], accelerator: "tcg", display: "none")
+            leases: [try VMDiskImageLease(url: bootURL, writable: true), try VMDiskImageLease(url: secondary)], accelerator: "tcg", display: "none")
         check(service.isRunning, "live QEMU and TPM startup")
         rejects({ try VMDiskImageStore.grow(at: bootURL, toGiB: 80) }, "live Windows session locks its disk")
         try await service.stop()
@@ -78,6 +96,15 @@ struct ARMGuestTests {
         check(unlocked.sizeGiB == 80, "Windows stop releases disk lock")
         try runtime.finishARMInstallation(at: windows)
         windowsRecord = try VMRegistry.read(at: windows)
+        try await service.start(folder: windows, record: windowsRecord, hardware: hardware, connectivity: .default,
+            leases: [try VMDiskImageLease(url: bootURL, writable: true), try VMDiskImageLease(url: secondary)], display: "none")
+        check(service.isRunning, "live Windows backend uses HVF acceleration")
+        let stopTask = Task { @MainActor in try await service.stop() }
+        stopTask.cancel()
+        try await stopTask.value
+        check(!service.isRunning, "cancelled caller still completes Windows shutdown")
+        let released = try VMDiskImageLease(url: bootURL, writable: true)
+        check(released.info.sizeGiB == 80, "cancelled stop releases locks after shutdown")
         let bootArgs = try VMQEMUPlan.arguments(folder: windows, record: windowsRecord, hardware: hardware,
             connectivity: .default, tpmSocket: scratch.appendingPathComponent("tpm.sock"))
         check(!bootArgs.contains(where: { $0.contains("drive=installer") }), "completed install ejects ISO")

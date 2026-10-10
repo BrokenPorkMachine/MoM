@@ -19,7 +19,7 @@ enum VMDiskImageError: LocalizedError {
         switch self {
         case .invalidPath: return "Choose a local .img or .raw file outside /dev. Symbolic links are not supported."
         case .invalidImage: return "Choose a regular raw disk image whose size is a positive multiple of 512 bytes."
-        case .invalidSize: return "Disk image capacity must be between 1 and 2048 GiB; a macOS boot disk needs at least 64 GiB."
+        case .invalidSize: return "Disk image capacity must be between 1 and 2048 GiB; a managed boot disk needs at least 64 GiB."
         case .alreadyExists: return "A file already exists at this destination. Choose a new filename."
         case .inUse: return "This disk image is in use. Stop every VM using it before changing it."
         case .shrinkUnsupported: return "Choose a larger capacity. Shrinking an image can destroy partitions and is not supported."
@@ -32,24 +32,55 @@ enum VMDiskImageError: LocalizedError {
 final class VMDiskImageLease {
     let descriptor: Int32
     let info: VMDiskImageInfo
+    private let lockDescriptor: Int32
     init(url: URL, writable: Bool = false) throws {
         let checked = try VMDiskImageStore.checkedURL(url)
         descriptor = open(checked.path, (writable ? O_RDWR : O_RDONLY) | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard descriptor >= 0 else { throw VMDiskImageStore.posixError() }
         do {
             info = try VMDiskImageStore.inspect(descriptor, url: checked)
-            guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { throw VMDiskImageError.inUse }
+            // VZ takes its own lock on the image when starting. Use a separate, per-inode
+            // lock for VolumeBoot sessions so its lock does not conflict with ours.
+            lockDescriptor = try VMDiskImageStore.openSessionLock(identity: info.identity)
         } catch {
             close(descriptor)
             throw error
         }
     }
-    deinit { close(descriptor) }
+    deinit { close(lockDescriptor); close(descriptor) }
 }
 
 enum VMDiskImageStore {
     static let gibibyte: UInt64 = 1_073_741_824
     static let maximumBytes = 2048 * gibibyte
+
+    fileprivate static func openSessionLock(identity: String) throws -> Int32 {
+        #if canImport(Darwin)
+        let base = URL(fileURLWithPath: "/private/tmp")
+        #else
+        let base = FileManager.default.temporaryDirectory
+        #endif
+        let directory = base.appendingPathComponent("VolumeBootDiskLocks-\(getuid())")
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+            catch {
+                if !FileManager.default.fileExists(atPath: directory.path) { throw error }
+            }
+        }
+        var directoryInfo = stat()
+        guard lstat(directory.path, &directoryInfo) == 0,
+              directoryInfo.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR), directoryInfo.st_uid == getuid(),
+              directoryInfo.st_mode & 0o077 == 0 else { throw VMDiskImageError.invalidPath }
+        let lockURL = directory.appendingPathComponent(identity + ".lock")
+        let lock = open(lockURL.path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, mode_t(0o600))
+        guard lock >= 0 else { throw posixError() }
+        var attributes = stat()
+        guard fstat(lock, &attributes) == 0, attributes.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              attributes.st_uid == getuid(), attributes.st_nlink == 1,
+              flock(lock, LOCK_EX | LOCK_NB) == 0 else { close(lock); throw VMDiskImageError.inUse }
+        // Do not unlink released locks: another process may already have opened the inode.
+        return lock
+    }
 
     static func checkedURL(_ url: URL) throws -> URL {
         guard url.isFileURL, url.path.hasPrefix("/"), ["img", "raw"].contains(url.pathExtension.lowercased()) else {
@@ -112,6 +143,7 @@ enum VMDiskImageStore {
     static func grow(at url: URL, toGiB sizeGiB: Int) throws -> VMDiskImageInfo {
         let bytes = try capacityBytes(sizeGiB)
         let lease = try VMDiskImageLease(url: url, writable: true)
+        guard flock(lease.descriptor, LOCK_EX | LOCK_NB) == 0 else { throw VMDiskImageError.inUse }
         guard bytes > lease.info.sizeBytes else { throw VMDiskImageError.shrinkUnsupported }
         try verifyUnchangedPath(lease.descriptor, url: lease.info.url)
         guard ftruncate(lease.descriptor, off_t(bytes)) == 0, fsync(lease.descriptor) == 0 else { throw posixError() }
@@ -123,6 +155,7 @@ enum VMDiskImageStore {
     }
 
     static func delete(_ lease: VMDiskImageLease) throws {
+        guard flock(lease.descriptor, LOCK_EX | LOCK_NB) == 0 else { throw VMDiskImageError.inUse }
         try verifyUnchangedPath(lease.descriptor, url: lease.info.url)
         guard unlink(lease.info.url.path) == 0 else { throw posixError() }
     }

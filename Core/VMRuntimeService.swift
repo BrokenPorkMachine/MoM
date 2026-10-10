@@ -7,7 +7,7 @@ final class VMRuntimeService {
         case unsupportedHost, missingMetadata(String), invalidMetadata(String), noVM, busy, incompleteInstallation, unsafeDestination
         var errorDescription: String? {
             switch self {
-            case .unsupportedHost: return "macOS guest virtualization requires an Apple Silicon host"
+            case .unsupportedHost: return "Managed ARM guests require an Apple Silicon host"
             case .missingMetadata(let name): return "Missing VM file: \(name)"
             case .invalidMetadata(let name): return "Invalid VM metadata: \(name)"
             case .noVM: return "No running VM"

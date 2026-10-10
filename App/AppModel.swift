@@ -72,6 +72,7 @@ final class AppModel: ObservableObject {
     private func loadGuestDetails(from folder: URL) {
         guard let record = try? VMRegistry.read(at: folder) else { return }
         guestOS = record.guestOS
+        if guestOS == .windowsARM { attachDisposableDisk = false }
         installationISOPath = record.installationMediaPath ?? ""
         windowsDriverISOPath = record.driverMediaPath ?? ""
         qemuExecutablePath = record.qemu?.executablePath ?? ""
@@ -410,6 +411,33 @@ final class AppModel: ObservableObject {
         } catch { vmStatus = "Could not finish installation: \(error.localizedDescription)" }
     }
 
+    func saveARMGuestMedia() {
+        guard !isVMInUse else { vmStatus = "Stop the VM before changing installation media"; return }
+        guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an existing VM folder"; return }
+        do {
+            let folder = URL(fileURLWithPath: vmFolderPath)
+            var record = try VMRegistry.read(at: folder)
+            guard record.guestOS != .macOS else { throw VMGuestError.invalidState }
+            let installer = installationISOPath.isEmpty ? nil : URL(fileURLWithPath: installationISOPath)
+            if record.state == .installing {
+                guard let installer else { throw VMGuestError.invalidISO }
+                try VMGuestMedia.verifyISO(installer)
+            }
+            if record.guestOS == .windowsARM {
+                let drivers = windowsDriverISOPath.isEmpty ? nil : URL(fileURLWithPath: windowsDriverISOPath)
+                if let drivers { try VMGuestMedia.verifyISO(drivers) }
+                var tools = try VMQEMUSettings.discover(qemuPath: qemuExecutablePath, swtpmPath: swtpmExecutablePath)
+                tools.machine = record.qemu?.machine ?? "virt-9.2"
+                record.qemu = tools
+                record.driverMediaPath = drivers?.path
+            }
+            record.installationMediaPath = installer?.path
+            try VMRegistry.write(record, at: folder)
+            refreshManagedVMs()
+            vmStatus = "Saved ARM media and executable paths for the next boot"
+        } catch { vmStatus = "Media update failed: \(error.localizedDescription)" }
+    }
+
     func canBeginQuit() -> Bool {
         guard !provisioning, !vmOperationInProgress, !vm.operationInProgress else {
             vmStatus = "Wait for the current VM operation to finish before quitting"
@@ -446,7 +474,7 @@ final class AppModel: ObservableObject {
                 }
                 else { settings.additionalDisks.append(VMAdditionalDisk(path: image.url.path)) }
             }
-            diskImageStatus = asBootDisk ? "Boot image selected. Use matching VM identity files to run an existing macOS installation." : "Secondary image attached for the next boot"
+            diskImageStatus = asBootDisk ? "Boot image selected. Keep the original VM identity and firmware files when running an existing installation." : "Secondary image attached for the next boot"
         } catch { diskImageStatus = "Selection failed: \(error.localizedDescription)" }
     }
 
@@ -486,7 +514,7 @@ final class AppModel: ObservableObject {
                 try VMRegistry.write(manifest, at: folder)
                 refreshManagedVMs()
             }
-            diskImageStatus = "Image grown to \(sizeGiB) GiB. Expand the partition and APFS container inside macOS to use the new space."
+            diskImageStatus = "Image grown to \(sizeGiB) GiB. Expand the partition and filesystem inside the guest to use the new space."
         } catch { diskImageStatus = "Resize failed: \(error.localizedDescription)" }
         diskRevision += 1
     }

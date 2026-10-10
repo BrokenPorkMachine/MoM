@@ -156,7 +156,11 @@ struct DashboardView: View {
                 ForEach(VMGuestOS.allCases) { Text($0.title).tag($0) }
             }.disabled(model.isVMInUse)
                 .onChange(of: model.guestOS) { _, guest in
-                    if guest != .macOS { model.hardware.keyboard = .usb; model.hardware.pointer = .mouse }
+                    if guest != .macOS {
+                        model.hardware.keyboard = .usb
+                        model.hardware.pointer = .mouse
+                        model.connectivity.guestToolsEnabled = false
+                    }
                     if guest == .windowsARM {
                         model.attachDisposableDisk = false
                         model.hardware.microphoneEnabled = false
@@ -175,6 +179,10 @@ struct DashboardView: View {
                 }
             }.disabled(model.isVMInUse)
             installationMediaControls.disabled(model.isVMInUse)
+            if model.guestOS != .macOS {
+                Button("Save media and backend paths for existing VM") { model.saveARMGuestMedia() }
+                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
+            }
             Stepper("New boot disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...2048, step: 16)
                 .disabled(model.isVMInUse || model.hardware.bootDiskPath != nil)
             if let path = model.hardware.bootDiskPath {
@@ -263,6 +271,8 @@ struct DashboardView: View {
                         TextField("swtpm executable", text: $model.swtpmExecutablePath)
                         TextField("AArch64 UEFI code firmware", text: $model.windowsFirmwareCodePath)
                         TextField("UEFI variable-store template", text: $model.windowsFirmwareVariablesPath)
+                        Text("Firmware templates apply when creating a new VM. Existing VMs retain their copied firmware and variable store.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -311,7 +321,7 @@ struct DashboardView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 16) {
                         sectionHeading("Identity", subtitle: "A friendly name for this VM instance")
-                        TextField("For example, macOS Development", text: $model.hardware.displayName)
+                        TextField("For example, Development VM", text: $model.hardware.displayName)
                             .textFieldStyle(.roundedBorder)
                     }.padding(4)
                 }
@@ -335,20 +345,22 @@ struct DashboardView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 14) {
                         sectionHeading("Display", subtitle: "Set the guest’s starting resolution")
-                        Label("Apple virtual Mac display · host accelerated where supported", systemImage: "sparkles")
+                        Label(model.guestOS == .macOS ? "Apple virtual Mac display · host accelerated where supported" :
+                              model.guestOS == .linuxARM ? "VirtIO guest display" : "QEMU framebuffer · resolution selected by guest firmware", systemImage: "sparkles")
                             .font(.caption).foregroundStyle(.secondary)
                         Picker("Resolution", selection: $model.hardware.display) {
                             ForEach(VMDisplayPreset.allCases) { preset in Text(preset.title).tag(preset) }
-                        }.pickerStyle(.segmented)
+                        }.pickerStyle(.segmented).disabled(model.guestOS == .windowsARM)
                         Toggle("Resize guest display with the VM window", isOn: $model.hardware.automaticallyResizeDisplay)
+                            .disabled(model.guestOS == .windowsARM)
                     }.padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 13) {
-                        sectionHeading("Sound", subtitle: "Virtual audio devices presented to macOS")
+                        sectionHeading("Sound", subtitle: "Virtual audio devices presented to the guest")
                         Toggle("Audio output", isOn: $model.hardware.audioOutputEnabled)
                         Toggle("Microphone input", isOn: $model.hardware.microphoneEnabled)
-                            .disabled(!model.hardware.audioOutputEnabled)
+                            .disabled(!model.hardware.audioOutputEnabled || model.guestOS == .windowsARM)
                         if model.hardware.microphoneEnabled {
                             Label("The guest may request microphone access from macOS.", systemImage: "mic.badge.waveform")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -386,7 +398,8 @@ struct DashboardView: View {
                         if model.guestOS == .windowsARM {
                             Text("The QEMU window uses Control + Option + G to capture/release input.").font(.caption)
                         }
-                        Text("The release hotkey always stays on the host. Input also releases when the app or VM window loses focus.")
+                        Text(model.guestOS == .windowsARM ? "Use QEMU’s window controls for mouse capture and release." :
+                             "The release hotkey always stays on the host. Input also releases when the app or VM window loses focus.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.padding(4)
                 }
@@ -508,7 +521,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Picker("Network mode", selection: $model.connectivity.networkMode) {
                             Text("NAT — internet through host (default)").tag(VMNetworkMode.nat)
-                            Text("Bridged — visible on LAN").tag(VMNetworkMode.bridged)
+                            if model.guestOS != .windowsARM { Text("Bridged — visible on LAN").tag(VMNetworkMode.bridged) }
                             Text("Disconnected").tag(VMNetworkMode.disconnected)
                         }
                         if model.connectivity.networkMode == .bridged {
@@ -543,10 +556,12 @@ struct DashboardView: View {
                             Button("Clear") { model.connectivity.sharedFolderPath = nil }
                         }
                         Toggle("Share workspace read-only (recommended)", isOn: $model.connectivity.shareReadOnly)
-                        Text("macOS guests automatically mount shares under /Volumes/My Shared Files/. A VM bundle or ancestor directory is not an eligible share.")
+                        Text(model.guestOS == .linuxARM ? "Mount the volumeboot VirtIO filesystem inside Linux to access Workspace. A VM bundle or ancestor directory is not an eligible share." :
+                             model.guestOS == .windowsARM ? "Workspace sharing is unavailable for this Windows backend." :
+                             "macOS guests automatically mount shares under /Volumes/My Shared Files/. A VM bundle or ancestor directory is not an eligible share.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }
+                }.disabled(model.guestOS == .windowsARM)
                 GroupBox("Guest companion tools") {
                     VStack(alignment: .leading, spacing: 12) {
                         Toggle("Enable explicit host–guest exchange", isOn: $model.connectivity.guestToolsEnabled)
@@ -613,8 +628,9 @@ struct DashboardView: View {
                                 .font(.caption).textSelection(.enabled)
                         }
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Text("Compile the guest agent using Scripts/build-guest-agent.sh. Run Scripts/install-guest-agent.sh inside the guest to opt in to automatic login startup. No remote shell is provided.")
+                }.disabled(model.guestOS != .macOS)
+                Text(model.guestOS == .macOS ? "Compile the guest agent using Scripts/build-guest-agent.sh. Run Scripts/install-guest-agent.sh inside the guest to opt in to automatic login startup. No remote shell is provided." :
+                     "The bundled companion tools run in macOS guests. Linux can use the workspace share directly.")
                     .font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }

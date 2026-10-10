@@ -10,11 +10,11 @@ struct VMDiskImagesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Disk images").font(.title2.bold())
-                Text("Create sparse raw images, choose the macOS boot disk, or attach secondary storage. Disk selections are saved with an existing VM.")
+                Text("Create sparse raw images, choose the boot disk, or attach secondary storage. Disk selections are saved with an existing VM.")
                     .foregroundStyle(.secondary)
                 TextField("VM bundle folder", text: $model.vmFolderPath)
                     .disabled(model.isVMInUse)
-                GroupBox("macOS boot disk") {
+                GroupBox("Boot disk") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Button("Load boot image…") { chooseImage(asBootDisk: true) }
@@ -23,19 +23,19 @@ struct VMDiskImagesView: View {
                         if model.vmFolderPath.hasPrefix("/") {
                             VMDiskImageRow(url: model.hardware.bootDiskURL(in: URL(fileURLWithPath: model.vmFolderPath)), isBootDisk: true)
                         }
-                        Text("Installing from an IPSW writes to the selected boot image. An existing macOS image also needs its original hardware model, machine identifier, and auxiliary storage in the VM folder.")
+                        Text("Installation writes to the selected boot image. Keep the original VM folder when loading an installed image; macOS needs its matching hardware model, machine identifier, and auxiliary storage.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 GroupBox("Create an image") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Use as the macOS boot disk", isOn: $createAsBootDisk)
+                        Toggle("Use as the boot disk", isOn: $createAsBootDisk)
                             .onChange(of: createAsBootDisk) { _, boot in if boot { createSizeGiB = max(64, createSizeGiB) } }
                         Stepper("Capacity: \(createSizeGiB) GiB", value: $createSizeGiB, in: (createAsBootDisk ? 64 : 1)...2048)
                         Button("Create disk image…") {
                             let panel = NSSavePanel()
                             panel.allowedContentTypes = [.init(filenameExtension: "img")!, .init(filenameExtension: "raw")!]
-                            panel.nameFieldStringValue = createAsBootDisk ? "macOS.img" : "Storage.img"
+                            panel.nameFieldStringValue = createAsBootDisk ? "Boot.img" : "Storage.img"
                             if panel.runModal() == .OK, let url = panel.url {
                                 model.createDiskImage(at: url, sizeGiB: createSizeGiB, asBootDisk: createAsBootDisk)
                             }
@@ -55,7 +55,7 @@ struct VMDiskImagesView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 Text(model.diskImageStatus).foregroundStyle(.secondary).textSelection(.enabled)
-                Text("Stop the VM before changing images. Growth changes the virtual disk capacity; expand the guest partition and APFS container afterward. Shrinking is unavailable because it can destroy guest data.")
+                Text("Stop the VM before changing images. Growth changes the virtual disk capacity; expand the guest partition and filesystem afterward. Shrinking is unavailable because it can destroy guest data.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -110,7 +110,7 @@ private struct VMDiskImageRow: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Grow \(url.lastPathComponent)").font(.headline)
                 Stepper("New capacity: \(newSizeGiB) GiB", value: $newSizeGiB, in: (isBootDisk ? 64 : 1)...2048)
-                Text("Existing data is preserved. Expand the partition and APFS container inside the guest after restarting.")
+                Text("Existing data is preserved. Expand the partition and filesystem inside the guest after restarting.")
                 HStack {
                     Button("Cancel") { resizePresented = false }.keyboardShortcut(.cancelAction)
                     Button("Grow image") {

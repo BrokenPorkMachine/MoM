@@ -70,6 +70,27 @@ struct AppDiskWorkflowTests {
         let lease = try VMDiskImageLease(url: bundledDisk)
         check(lease.info.sizeBytes == 64 * VMDiskImageStore.gibibyte, "failed startup releases image lock")
         withExtendedLifetime(lease) {}
+        let iso = scratch.appendingPathComponent("replacement.iso")
+        try Data(repeating: 0, count: 4096).write(to: iso)
+        var armRecord = try VMRegistry.read(at: bundle)
+        armRecord.guestOS = .windowsARM
+        armRecord.state = .installing
+        armRecord.installationMediaPath = scratch.appendingPathComponent("moved.iso").path
+        armRecord.driverMediaPath = iso.path
+        armRecord.qemu = VMQEMUSettings(executablePath: "/usr/bin/true", swtpmPath: "/usr/bin/true")
+        try VMRegistry.write(armRecord, at: bundle)
+        model.attachDisposableDisk = true
+        model.loadHardwareProfile(for: bundle)
+        check(!model.attachDisposableDisk, "loading Windows clears unsupported physical attachment")
+        model.installationISOPath = iso.path
+        model.windowsDriverISOPath = ""
+        model.saveARMGuestMedia()
+        let savedMedia = try VMRegistry.read(at: bundle)
+        check(savedMedia.installationMediaPath == iso.path && savedMedia.driverMediaPath == nil, "replacement installer and driver detachment persist")
+        model.installationISOPath = ""
+        model.saveARMGuestMedia()
+        let rejectedMedia = try VMRegistry.read(at: bundle)
+        check(rejectedMedia.installationMediaPath == iso.path, "incomplete installation keeps installer on invalid media update")
         print("PASS: \(count) app disk workflow, persisted selection, manifest, and failed startup assertions")
     }
 }

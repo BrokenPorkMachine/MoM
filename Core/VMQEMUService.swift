@@ -19,8 +19,12 @@ enum VMQEMUPlan {
             ["-blockdev", try json(["driver": "raw", "node-name": id, "read-only": readOnly,
                                    "file": ["driver": "file", "filename": url.path]])]
         }
-        var args = ["-name", hardware.displayName.isEmpty ? folder.lastPathComponent : hardware.displayName,
-                    "-uuid", record.id.uuidString, "-machine", "\(settings.machine),gic-version=3,highmem=off,acpi=on,pflash0=fwcode,pflash1=fwvars",
+        // QEMU parses -name as a comma-separated option, even with separate argv entries.
+        let name = (hardware.displayName.isEmpty ? folder.lastPathComponent : hardware.displayName)
+            .replacingOccurrences(of: ",", with: ",,")
+        // RAM may exceed 4 GiB; keep device MMIO in the low address space for HVF.
+        var args = ["-name", name,
+                    "-uuid", record.id.uuidString, "-machine", "\(settings.machine),gic-version=3,highmem=on,highmem-mmio=off,highmem-ecam=off,highmem-redists=off,acpi=on,pflash0=fwcode,pflash1=fwvars",
                     "-accel", accelerator, "-cpu", accelerator == "hvf" ? "host" : "max",
                     "-smp", String(hardware.cpuCount), "-m", "\(hardware.memoryGiB * 1024)",
                     "-nodefaults", "-no-user-config", "-monitor", "none", "-serial", "none", "-qmp", "stdio",
@@ -128,6 +132,8 @@ final class VMQEMUService {
                 let status = ended.terminationStatus
                 Task { @MainActor [weak self] in
                     guard let self, self.sessionID == token else { return }
+                    await self.stopTPM()
+                    guard self.sessionID == token else { return }
                     self.cleanup()
                     self.onExit?(status == 0 ? "Windows ARM VM stopped" : "Windows ARM exited (\(status)); inspect qemu.log in the VM folder")
                 }
@@ -152,13 +158,13 @@ final class VMQEMUService {
             try? command("quit")
             for _ in 0..<50 {
                 if !process.isRunning { break }
-                try await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if process.isRunning {
                 process.terminate()
                 for _ in 0..<20 {
                     if !process.isRunning { break }
-                    try await Task.sleep(nanoseconds: 100_000_000)
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                 }
                 if process.isRunning {
                     kill(process.processIdentifier, SIGKILL)
@@ -167,7 +173,21 @@ final class VMQEMUService {
                 }
             }
         }
+        await stopTPM()
         cleanup()
+    }
+
+    private func stopTPM() async {
+        guard let tpm, tpm.isRunning else { return }
+        tpm.terminate()
+        for _ in 0..<20 {
+            if !tpm.isRunning { return }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        if tpm.isRunning {
+            kill(tpm.processIdentifier, SIGKILL)
+            await Task.detached { tpm.waitUntilExit() }.value
+        }
     }
 
     private func receive(_ data: Data, session: UUID) {

@@ -1,6 +1,10 @@
 # VolumeBoot — Disk images and console input
 
-**Managed VM → Disks** now creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable macOS installation/boot images. **Guest console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default). See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md). Run `Scripts/test-disk-images.sh` for disk and input policy regression tests.
+**Managed VM** installs and runs macOS from Apple IPSW files, ARM Linux from an AArch64 ISO using Apple Virtualization.framework, and Windows ARM from an ARM64 ISO using QEMU/HVF with persistent UEFI and TPM 2.0. Windows requires QEMU 9.2+ and swtpm. See [ARM guest setup](Docs/ARM_GUESTS.md).
+
+**Managed VM → Disks** creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable installation/boot images. **Guest console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default) for macOS/Linux. Windows uses QEMU’s console and Control + Option + G. See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md).
+
+Run `Scripts/test-disk-images.sh` and `Scripts/test-arm-guests.sh` for disk workflows and native Linux/QEMU startup/shutdown checks. The latter requires macOS, QEMU, and swtpm; its synthetic ISO tests configuration and EFI/backend startup, not OS installation. Full OS installation and interactive console checks require your own compatible installer media.
 
 # MacOnMac v0.16.0 — Guest Tools v2
 
