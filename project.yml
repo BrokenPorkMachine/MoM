@@ -1,0 +1,68 @@
+name: VolumeBoot
+options:
+  bundleIdPrefix: ca.zensoftware
+  deploymentTarget:
+    macOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    CODE_SIGN_ENTITLEMENTS: Resources/VolumeBoot.entitlements
+    ENABLE_HARDENED_RUNTIME: YES
+    DEVELOPMENT_TEAM: ""
+targets:
+  VolumeBoot:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      - path: Core
+    info:
+      path: Resources/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot
+        PRODUCT_NAME: VolumeBoot
+    postBuildScripts:
+      - name: Bundle signed launchd daemon
+        script: |
+          set -euo pipefail
+          OUT="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}"
+          mkdir -p "${OUT}/MacOS" "${OUT}/Library/LaunchDaemons"
+          cp "${BUILT_PRODUCTS_DIR}/VolumeBootRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
+          cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist"
+    dependencies:
+      - target: VolumeBootDiskBroker
+        embed: true
+      - target: VolumeBootRawDiskDaemon
+  VolumeBootDiskBroker:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - path: Helpers/VolumeBootDiskBroker/main.swift
+      - path: Core/BrokerAuthorizationPolicy.swift
+      - path: Core/BrokerProtocolContract.swift
+    info:
+      path: Helpers/VolumeBootDiskBroker/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot.DiskBroker
+        CODE_SIGN_ENTITLEMENTS: ""
+
+  VolumeBootRawDiskDaemon:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Privileged/VolumeBootRawDiskDaemon/main.swift
+      - path: Core/DaemonBrokerContract.swift
+      - path: Core/BrokerAuthorizationPolicy.swift
+      - path: Core/ReadOnlyGrantPolicy.swift
+      - path: Core/PhysicalDiskTopologyProof.swift
+      - path: Privileged/VolumeBootRawDiskDaemon/PhysicalDiskTopologyProbe.swift
+      - path: Privileged/VolumeBootRawDiskDaemon/TrustedDiskProbe.swift
+    settings:
+      base:
+        PRODUCT_NAME: VolumeBootRawDiskDaemon
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot.RawDiskBroker
+        CODE_SIGN_ENTITLEMENTS: ""
+        ENABLE_HARDENED_RUNTIME: YES
