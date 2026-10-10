@@ -14,6 +14,13 @@ final class AppModel: ObservableObject {
     @Published var selectedDeviceID: String?
     @Published var vmFolderPath = ""
     @Published var restoreImagePath = ""
+    @Published var guestOS: VMGuestOS = .macOS
+    @Published var installationISOPath = ""
+    @Published var windowsDriverISOPath = ""
+    @Published var qemuExecutablePath = ""
+    @Published var swtpmExecutablePath = ""
+    @Published var windowsFirmwareCodePath = ""
+    @Published var windowsFirmwareVariablesPath = ""
     @Published var diskSizeGiB = 80
     @Published private(set) var provisioning = false
     @Published private(set) var installProgress: Double = 0
@@ -55,6 +62,22 @@ final class AppModel: ObservableObject {
     @Published private(set) var networkHealth = "Select a VM and check its profile"
     @Published private(set) var clipboardStatus = "Manual text clipboard only; no automatic sync"
 
+    init() {
+        vm.onExternalStateChange = { [weak self] status in
+            self?.vmStatus = status
+            self?.vmRevision += 1
+        }
+    }
+
+    private func loadGuestDetails(from folder: URL) {
+        guard let record = try? VMRegistry.read(at: folder) else { return }
+        guestOS = record.guestOS
+        installationISOPath = record.installationMediaPath ?? ""
+        windowsDriverISOPath = record.driverMediaPath ?? ""
+        qemuExecutablePath = record.qemu?.executablePath ?? ""
+        swtpmExecutablePath = record.qemu?.swtpmPath ?? ""
+    }
+
     func refreshNetworkInterfaces() {
         networkInterfaces = VZBridgedNetworkInterface.networkInterfaces.map(\.identifier)
     }
@@ -66,6 +89,7 @@ final class AppModel: ObservableObject {
             hardware = try VMHardwareStore.load(from: URL(fileURLWithPath: vmFolderPath))
             hardwareLoaded = true
             hardwareStatus = "Hardware profile loaded"
+            loadGuestDetails(from: URL(fileURLWithPath: vmFolderPath))
             connectivity = try VMConnectivityStore.load(from: URL(fileURLWithPath: vmFolderPath))
             refreshNetworkInterfaces()
             connectivityStatus = "Loaded VM connectivity profile"
@@ -97,6 +121,7 @@ final class AppModel: ObservableObject {
             hardware = try VMHardwareStore.load(from: folder)
             hardwareLoaded = true
             hardwareStatus = "Hardware profile loaded for \(folder.lastPathComponent)"
+            loadGuestDetails(from: folder)
             connectivity = try VMConnectivityStore.load(from: folder)
             connectivityStatus = "Loaded VM connectivity profile"
             refreshNetworkInterfaces()
@@ -294,6 +319,9 @@ final class AppModel: ObservableObject {
         guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an absolute VM folder path"; return }
         let url = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
+            loadGuestDetails(from: url)
+            hardware = try VMHardwareStore.load(from: url)
+            connectivity = try VMConnectivityStore.load(from: url)
             var grant: PrivilegedDiskGrant?
             if attachDisposableDisk {
                 guard let device = devices.first(where: { $0.id == selectedDeviceID }), device.isWholeDisk else {
@@ -310,7 +338,7 @@ final class AppModel: ObservableObject {
                 throw error
             }
             vmRevision += 1
-            vmStatus = "Managed VM started"
+            vmStatus = "\(guestOS.title) VM started" + (vm.usesExternalConsole ? " in the QEMU window; Control + Option + G releases input" : "")
         } catch { vmStatus = "Boot failed: \(error.localizedDescription)" }
     }
 
@@ -335,8 +363,9 @@ final class AppModel: ObservableObject {
 
     func provisionVM() async {
         guard !isVMInUse else { return }
-        guard vmFolderPath.hasPrefix("/"), restoreImagePath.hasPrefix("/") else {
-            vmStatus = "Choose a destination folder path and local IPSW"; return
+        let mediaPath = guestOS == .macOS ? restoreImagePath : installationISOPath
+        guard vmFolderPath.hasPrefix("/"), mediaPath.hasPrefix("/") else {
+            vmStatus = "Choose a new VM folder path and local \(guestOS == .macOS ? "IPSW" : "ARM64 ISO")"; return
         }
         provisioning = true
         hardwareLoaded = true
@@ -347,22 +376,47 @@ final class AppModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 350_000_000)
             }
         }
-        vmStatus = "Provisioning macOS from restore image (do not quit the application)"
+        vmStatus = "Preparing \(guestOS.title) installation"
         defer { progressMonitor.cancel(); provisioning = false; vmRevision += 1; refreshManagedVMs() }
         do {
-            try await vm.provision(
-                at: URL(fileURLWithPath: vmFolderPath, isDirectory: true),
-                restoreImageURL: URL(fileURLWithPath: restoreImagePath),
-                diskSizeGiB: diskSizeGiB,
-                connectivity: connectivity,
-                hardware: hardware
-            )
-            installProgress = 1
-            vmStatus = "Installation completed. Start the managed VM to boot macOS."
+            let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
+            if guestOS == .macOS {
+                try await vm.provision(at: folder, restoreImageURL: URL(fileURLWithPath: restoreImagePath),
+                    diskSizeGiB: diskSizeGiB, connectivity: connectivity, hardware: hardware)
+                installProgress = 1
+                vmStatus = "Installation completed. Start the managed VM to boot macOS."
+            } else {
+                let tools = guestOS == .windowsARM ? try VMQEMUSettings.discover(qemuPath: qemuExecutablePath, swtpmPath: swtpmExecutablePath) : nil
+                let firmwareCode = try tools?.firmware(named: "edk2-aarch64-code.fd", overridePath: windowsFirmwareCodePath)
+                let firmwareVars = try tools?.firmware(named: "edk2-arm-vars.fd", overridePath: windowsFirmwareVariablesPath)
+                let drivers = windowsDriverISOPath.isEmpty || guestOS != .windowsARM ? nil : URL(fileURLWithPath: windowsDriverISOPath)
+                try vm.createARMGuest(at: folder, guestOS: guestOS, installationMediaURL: URL(fileURLWithPath: installationISOPath),
+                    diskSizeGiB: diskSizeGiB, connectivity: connectivity, hardware: hardware, qemuSettings: tools,
+                    firmwareCodeURL: firmwareCode, firmwareVariablesURL: firmwareVars, driverMediaURL: drivers)
+                try await vm.startExistingVM(at: folder)
+                vmStatus = "\(guestOS.title) installer running\(vm.usesExternalConsole ? " in the QEMU window" : " in the guest console"). Complete setup, shut down the guest, then Finish installation and eject ISO."
+            }
         } catch { vmStatus = "Installation failed: \(error.localizedDescription). Incomplete VM data was retained." }
     }
 
-    var isVMInUse: Bool { provisioning || vmOperationInProgress || vm.operationInProgress || vm.virtualMachine != nil }
+    var isVMInUse: Bool { provisioning || vmOperationInProgress || vm.operationInProgress || vm.hasSession }
+
+    func finishARMInstallation() {
+        guard !isVMInUse else { vmStatus = "Shut down and stop the VM before finishing installation"; return }
+        do {
+            try vm.finishARMInstallation(at: URL(fileURLWithPath: vmFolderPath))
+            refreshManagedVMs()
+            vmStatus = "Installation acknowledged; the installer ISO will be ejected on the next boot"
+        } catch { vmStatus = "Could not finish installation: \(error.localizedDescription)" }
+    }
+
+    func canBeginQuit() -> Bool {
+        guard !provisioning, !vmOperationInProgress, !vm.operationInProgress else {
+            vmStatus = "Wait for the current VM operation to finish before quitting"
+            return false
+        }
+        return true
+    }
 
     private func updateDiskSelection(_ update: (inout VMHardwareSettings) -> Void) throws {
         guard !isVMInUse else { throw VMDiskImageError.inUse }

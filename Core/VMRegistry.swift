@@ -1,6 +1,6 @@
 import Foundation
 
-enum VMInstallState: String, Codable { case provisioning, installed, failed }
+enum VMInstallState: String, Codable { case provisioning, installing, installed, failed }
 
 struct ManagedVMManifest: Codable, Identifiable {
     let version: Int
@@ -9,6 +9,36 @@ struct ManagedVMManifest: Codable, Identifiable {
     var diskSizeGiB: Int
     var state: VMInstallState
     var lastFailure: String?
+    var guestOS: VMGuestOS = .macOS
+    var installationMediaPath: String?
+    var driverMediaPath: String?
+    var qemu: VMQEMUSettings?
+
+    init(version: Int, id: UUID, createdAt: Date, diskSizeGiB: Int, state: VMInstallState, lastFailure: String?,
+         guestOS: VMGuestOS = .macOS, installationMediaPath: String? = nil, driverMediaPath: String? = nil,
+         qemu: VMQEMUSettings? = nil) {
+        self.version = version; self.id = id; self.createdAt = createdAt; self.diskSizeGiB = diskSizeGiB
+        self.state = state; self.lastFailure = lastFailure; self.guestOS = guestOS
+        self.installationMediaPath = installationMediaPath; self.driverMediaPath = driverMediaPath; self.qemu = qemu
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, id, createdAt, diskSizeGiB, state, lastFailure, guestOS, installationMediaPath, driverMediaPath, qemu
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        id = try values.decode(UUID.self, forKey: .id)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        diskSizeGiB = try values.decode(Int.self, forKey: .diskSizeGiB)
+        state = try values.decode(VMInstallState.self, forKey: .state)
+        lastFailure = try values.decodeIfPresent(String.self, forKey: .lastFailure)
+        guestOS = try values.decodeIfPresent(VMGuestOS.self, forKey: .guestOS) ?? .macOS
+        installationMediaPath = try values.decodeIfPresent(String.self, forKey: .installationMediaPath)
+        driverMediaPath = try values.decodeIfPresent(String.self, forKey: .driverMediaPath)
+        qemu = try values.decodeIfPresent(VMQEMUSettings.self, forKey: .qemu)
+    }
 }
 
 enum VMRegistry {

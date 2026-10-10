@@ -133,7 +133,7 @@ struct DashboardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Managed virtual machine").font(.largeTitle.bold())
-                    Text("Create a macOS guest or tune the hardware for an existing instance.").foregroundStyle(.secondary)
+                    Text("Install and run macOS, ARM Linux, or Windows ARM.").foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "cpu.fill").font(.system(size: 34)).foregroundStyle(.blue.gradient)
@@ -152,6 +152,19 @@ struct DashboardView: View {
 
     private var vmOverview: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Picker("Guest operating system", selection: $model.guestOS) {
+                ForEach(VMGuestOS.allCases) { Text($0.title).tag($0) }
+            }.disabled(model.isVMInUse)
+                .onChange(of: model.guestOS) { _, guest in
+                    if guest != .macOS { model.hardware.keyboard = .usb; model.hardware.pointer = .mouse }
+                    if guest == .windowsARM {
+                        model.attachDisposableDisk = false
+                        model.hardware.microphoneEnabled = false
+                        model.connectivity.guestToolsEnabled = false
+                        model.connectivity.sharedFolderPath = nil
+                        if model.connectivity.networkMode == .bridged { model.connectivity.networkMode = .nat }
+                    }
+                }
             HStack {
                 TextField("VM bundle folder", text: $model.vmFolderPath)
                 Button("Choose…") {
@@ -161,16 +174,7 @@ struct DashboardView: View {
                     if panel.runModal() == .OK, let url = panel.url { model.loadHardwareProfile(for: url) }
                 }
             }.disabled(model.isVMInUse)
-            HStack {
-                TextField("Apple macOS restore image (.ipsw)", text: $model.restoreImagePath)
-                Button("Choose IPSW…") {
-                    let panel = NSOpenPanel()
-                    panel.allowedContentTypes = [.init(filenameExtension: "ipsw")!]
-                    panel.canChooseDirectories = false
-                    panel.canChooseFiles = true
-                    if panel.runModal() == .OK { model.restoreImagePath = panel.url?.path ?? "" }
-                }
-            }
+            installationMediaControls.disabled(model.isVMInUse)
             Stepper("New boot disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...2048, step: 16)
                 .disabled(model.isVMInUse || model.hardware.bootDiskPath != nil)
             if let path = model.hardware.bootDiskPath {
@@ -183,17 +187,23 @@ struct DashboardView: View {
                 Label(model.hardware.display.title, systemImage: "display")
             }.font(.subheadline).foregroundStyle(.secondary)
             Toggle("Attach selected BLANK external disk as read-only secondary storage", isOn: $model.attachDisposableDisk)
+                .disabled(model.guestOS == .windowsARM || model.isVMInUse)
             Text("Requires signed and approved root daemon. Only disposable, unmounted, unpartitioned external disks are accepted. The selected physical disk is NEVER the VM boot disk.")
                 .font(.caption).foregroundStyle(.orange)
             HStack {
-                Button("Install macOS") { installMacOS() }
-                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty || model.restoreImagePath.isEmpty)
+                Button(model.guestOS == .macOS ? "Install macOS" : "Create and start installer") { installGuest() }
+                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty ||
+                        (model.guestOS == .macOS ? model.restoreImagePath.isEmpty : model.installationISOPath.isEmpty))
                 Button("Start VM") { Task { await model.bootManagedVM() } }
                     .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
                 Button("Stop") { Task { await model.stopVM() } }
-                    .disabled(model.provisioning || model.vmOperationInProgress || model.vm.virtualMachine == nil)
+                    .disabled(model.provisioning || model.vmOperationInProgress || !model.vm.hasSession)
             }
-            if model.provisioning {
+            if model.guestOS != .macOS {
+                Button("Finish installation and eject ISO…") { finishISOInstallation() }
+                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
+            }
+            if model.provisioning && model.guestOS == .macOS {
                 ProgressView(value: min(max(model.installProgress, 0), 1)) {
                     Text("Installing macOS")
                 } currentValueLabel: {
@@ -212,7 +222,7 @@ struct DashboardView: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(entry.url.lastPathComponent).font(.headline)
-                                Text(entry.record.state.rawValue).font(.caption).foregroundStyle(.secondary)
+                                Text("\(entry.record.guestOS.title) · \(entry.record.state.rawValue)").font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             Button("Select") { model.loadHardwareProfile(for: entry.url) }
@@ -222,12 +232,52 @@ struct DashboardView: View {
                 }
             }
             GroupBox("Guest console") {
-                VMConsoleView(virtualMachine: model.vm.virtualMachine, hardware: model.hardware)
-                    .id(model.vmRevision)
-                    .frame(minWidth: 550, minHeight: 300)
+                if model.guestOS == .windowsARM {
+                    ContentUnavailableView("Windows ARM console", systemImage: "desktopcomputer", description:
+                        Text("QEMU opens the Windows display in its own window. Control + Option + G captures/releases input. Close that window or use Stop to end the VM."))
+                        .frame(minWidth: 550, minHeight: 220)
+                } else {
+                    VMConsoleView(virtualMachine: model.vm.virtualMachine, hardware: model.hardware)
+                        .id(model.vmRevision)
+                        .frame(minWidth: 550, minHeight: 300)
+                }
             }
-            Text("Installation requires a NEW destination folder (must not already exist), compatible Apple IPSW, and sufficient disk space. Failures retain incomplete VM data; never select a physical disk device path.")
+            Text("Use a new destination folder for installation, a compatible Apple IPSW or ARM64 ISO, and sufficient disk space. After an ISO installation, shut down the guest, click Stop, then Finish installation and eject ISO before starting from disk.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var installationMediaControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if model.guestOS == .macOS {
+                mediaPicker("Apple macOS restore image (.ipsw)", extension: "ipsw", selection: $model.restoreImagePath)
+            } else {
+                mediaPicker("ARM64 / AArch64 installer ISO", extension: "iso", selection: $model.installationISOPath)
+                Text("Use an ARM64 / AArch64 image; x86 installers cannot boot these VMs.").font(.caption).foregroundStyle(.secondary)
+                if model.guestOS == .windowsARM {
+                    mediaPicker("Optional ARM64 VirtIO driver ISO", extension: "iso", selection: $model.windowsDriverISOPath)
+                    Text("Windows uses QEMU 9.2 or newer, persistent UEFI and TPM 2.0. Install ARM64 VirtIO network drivers from the driver ISO during setup. NAT or disconnected networking is supported.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    DisclosureGroup("Windows backend paths (automatically detected for Homebrew)") {
+                        TextField("qemu-system-aarch64 executable", text: $model.qemuExecutablePath)
+                        TextField("swtpm executable", text: $model.swtpmExecutablePath)
+                        TextField("AArch64 UEFI code firmware", text: $model.windowsFirmwareCodePath)
+                        TextField("UEFI variable-store template", text: $model.windowsFirmwareVariablesPath)
+                    }
+                }
+            }
+        }
+    }
+
+    private func mediaPicker(_ title: String, extension suffix: String, selection: Binding<String>) -> some View {
+        HStack {
+            TextField(title, text: selection)
+            Button("Choose…") {
+                let panel = NSOpenPanel()
+                panel.allowedContentTypes = [.init(filenameExtension: suffix)!]
+                panel.canChooseDirectories = false
+                if panel.runModal() == .OK { selection.wrappedValue = panel.url?.path ?? "" }
+            }
         }
     }
 
@@ -320,15 +370,21 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 13) {
                         sectionHeading("Input", subtitle: "Choose how keyboard and pointer input appears to the guest")
                         Picker("Keyboard", selection: $model.hardware.keyboard) {
-                            ForEach(VMKeyboardKind.allCases) { kind in Text(kind.title).tag(kind) }
+                            ForEach(VMKeyboardKind.allCases.filter { model.guestOS == .macOS || $0 == .usb }) { kind in Text(kind.title).tag(kind) }
                         }
                         Picker("Pointing device", selection: $model.hardware.pointer) {
-                            ForEach(VMPointerKind.allCases) { kind in Text(kind.title).tag(kind) }
+                            ForEach(VMPointerKind.allCases.filter { model.guestOS == .macOS || $0 == .mouse }) { kind in Text(kind.title).tag(kind) }
                         }
                         Toggle("Capture system shortcuts in the VM", isOn: $model.hardware.capturesSystemKeys)
+                            .disabled(model.guestOS == .windowsARM)
                         Toggle("Capture mouse when clicking the guest console", isOn: $model.hardware.capturesMouseOnClick)
+                            .disabled(model.guestOS == .windowsARM)
                         Picker("Release mouse and keyboard", selection: $model.hardware.inputReleaseShortcut) {
                             ForEach(VMInputReleaseShortcut.allCases) { Text($0.title).tag($0) }
+                        }
+                        .disabled(model.guestOS == .windowsARM)
+                        if model.guestOS == .windowsARM {
+                            Text("The QEMU window uses Control + Option + G to capture/release input.").font(.caption)
                         }
                         Text("The release hotkey always stays on the host. Input also releases when the app or VM window loses focus.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -414,17 +470,26 @@ struct DashboardView: View {
         }
     }
 
-    private func installMacOS() {
+    private func installGuest() {
         if let path = model.hardware.bootDiskPath {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "Install macOS into the selected disk image?"
+            alert.messageText = "Install \(model.guestOS.title) into the selected disk image?"
             alert.informativeText = "Installation can erase all existing data in this image:\n\n\(path)"
             alert.addButton(withTitle: "Cancel")
-            alert.addButton(withTitle: "Install macOS")
+            alert.addButton(withTitle: "Install \(model.guestOS.title)")
             guard alert.runModal() == .alertSecondButtonReturn else { return }
         }
         Task { await model.provisionVM() }
+    }
+
+    private func finishISOInstallation() {
+        let alert = NSAlert()
+        alert.messageText = "Finish this ISO installation?"
+        alert.informativeText = "Complete the guest installer and shut down the guest first. This marks the VM ready and removes the installation ISO from subsequent boots."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Finish and eject ISO")
+        if alert.runModal() == .alertSecondButtonReturn { model.finishARMInstallation() }
     }
 
     private var connectivityView: some View {

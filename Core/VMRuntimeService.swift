@@ -24,14 +24,27 @@ final class VMRuntimeService {
     private var physicalDiskLease: ReadOnlyPhysicalDiskLease?
     private var imageLeases: [VMDiskImageLease] = []
     private(set) var operationInProgress = false
+    private let qemu = VMQEMUService()
+    var onExternalStateChange: ((String) -> Void)?
+    var hasSession: Bool { virtualMachine != nil || qemu.isRunning }
+    var usesExternalConsole: Bool { qemu.isRunning }
+
+    init() {
+        qemu.onExit = { [weak self] status in
+            self?.currentFolder = nil
+            self?.onExternalStateChange?(status)
+        }
+    }
 
     func startExistingVM(at folder: URL, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
         #if arch(arm64)
-        guard virtualMachine == nil, !operationInProgress else { throw RuntimeError.busy }
+        guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
         defer { operationInProgress = false }
         let manifest = try VMRegistry.read(at: folder)
-        guard manifest.state == .installed else { throw RuntimeError.incompleteInstallation }
+        guard manifest.state == .installed || (manifest.guestOS != .macOS && manifest.state == .installing) else {
+            throw RuntimeError.incompleteInstallation
+        }
         let connectivity = try VMConnectivityStore.load(from: folder)
         if connectivity.guestToolsEnabled { try HostGuestExchange.createIfNeeded(in: folder) }
         let hardware = try VMHardwareStore.load(from: folder)
@@ -39,6 +52,13 @@ final class VMRuntimeService {
             cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
         let leases = try lockImages(folder: folder, hardware: hardware)
+        if manifest.guestOS == .windowsARM {
+            guard readOnlyDisk == nil else { throw VMGuestError.unsupportedWindowsSettings }
+            currentFolder = folder
+            do { try await qemu.start(folder: folder, record: manifest, hardware: hardware, connectivity: connectivity, leases: leases) }
+            catch { currentFolder = nil; throw error }
+            return
+        }
         let config = try makeConfiguration(folder: folder, hardware: hardware, readOnlyDisk: readOnlyDisk)
         let vm = VZVirtualMachine(configuration: config)
         virtualMachine = vm
@@ -56,6 +76,7 @@ final class VMRuntimeService {
     /// A guest can stop on its own; permit safe lease cleanup without invoking
     /// `stop()` a second time on an already stopped VM.
     func discardAlreadyStoppedSession() -> Bool {
+        if qemu.isRunning { return false }
         guard let vm = virtualMachine else { return true }
         guard vm.state == .stopped || vm.state == .error else { return false }
         virtualMachine = nil
@@ -66,6 +87,11 @@ final class VMRuntimeService {
     }
 
     func stop() async throws {
+        if qemu.isRunning {
+            try await qemu.stop()
+            currentFolder = nil
+            return
+        }
         guard let virtualMachine else { throw RuntimeError.noVM }
         try await virtualMachine.stop()
         self.virtualMachine = nil
@@ -88,19 +114,32 @@ final class VMRuntimeService {
             guard FileManager.default.fileExists(atPath: url.path) else { throw RuntimeError.missingMetadata(name) }
             return url
         }
-        guard let model = VZMacHardwareModel(dataRepresentation: try Data(contentsOf: file("hardware-model.bin"))), model.isSupported else {
-            throw RuntimeError.invalidMetadata("hardware-model.bin")
-        }
-        guard let identity = VZMacMachineIdentifier(dataRepresentation: try Data(contentsOf: file("machine-id.bin"))) else {
-            throw RuntimeError.invalidMetadata("machine-id.bin")
-        }
-        let platform = VZMacPlatformConfiguration()
-        platform.hardwareModel = model
-        platform.machineIdentifier = identity
-        platform.auxiliaryStorage = VZMacAuxiliaryStorage(url: try file("auxiliary-storage"))
+        let record = try VMRegistry.read(at: folder)
         let config = VZVirtualMachineConfiguration()
-        config.platform = platform
-        config.bootLoader = VZMacOSBootLoader()
+        if record.guestOS == .macOS {
+            guard let model = VZMacHardwareModel(dataRepresentation: try Data(contentsOf: file("hardware-model.bin"))), model.isSupported else {
+                throw RuntimeError.invalidMetadata("hardware-model.bin")
+            }
+            guard let identity = VZMacMachineIdentifier(dataRepresentation: try Data(contentsOf: file("machine-id.bin"))) else {
+                throw RuntimeError.invalidMetadata("machine-id.bin")
+            }
+            let platform = VZMacPlatformConfiguration()
+            platform.hardwareModel = model
+            platform.machineIdentifier = identity
+            platform.auxiliaryStorage = VZMacAuxiliaryStorage(url: try file("auxiliary-storage"))
+            config.platform = platform
+            config.bootLoader = VZMacOSBootLoader()
+        } else {
+            let platform = VZGenericPlatformConfiguration()
+            guard let identity = VZGenericMachineIdentifier(dataRepresentation: try Data(contentsOf: file("machine-id.bin"))) else {
+                throw RuntimeError.invalidMetadata("machine-id.bin")
+            }
+            platform.machineIdentifier = identity
+            config.platform = platform
+            let boot = VZEFIBootLoader()
+            boot.variableStore = VZEFIVariableStore(url: try file("efi-vars.bin"))
+            config.bootLoader = boot
+        }
         config.cpuCount = hardware.cpuCount
         config.memorySize = UInt64(hardware.memoryGiB) * 1_073_741_824
         let attachment = try VZDiskImageStorageDeviceAttachment(url: hardware.bootDiskURL(in: folder), readOnly: false)
@@ -109,13 +148,28 @@ final class VMRuntimeService {
             let image = try VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: disk.path), readOnly: disk.readOnly)
             config.storageDevices.append(VZVirtioBlockDeviceConfiguration(attachment: image))
         }
+        if record.guestOS == .linuxARM, record.state == .installing {
+            guard let path = record.installationMediaPath else { throw VMGuestError.invalidISO }
+            let iso = URL(fileURLWithPath: path)
+            try VMGuestMedia.verifyISO(iso)
+            config.storageDevices.append(VZUSBMassStorageDeviceConfiguration(
+                attachment: try VZDiskImageStorageDeviceAttachment(url: iso, readOnly: true)))
+        }
         if let readOnlyDisk { config.storageDevices.append(try readOnlyDisk.makeDevice()) }
-        let graphics = VZMacGraphicsDeviceConfiguration()
-        graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: hardware.display.width,
-            heightInPixels: hardware.display.height, pixelsPerInch: hardware.display.pixelsPerInch)]
-        config.graphicsDevices = [graphics]
-        config.keyboards = [hardware.keyboard == .mac ? VZMacKeyboardConfiguration() : VZUSBKeyboardConfiguration()]
-        config.pointingDevices = [hardware.pointer == .trackpad ? VZMacTrackpadConfiguration() : VZUSBScreenCoordinatePointingDeviceConfiguration()]
+        if record.guestOS == .macOS {
+            let graphics = VZMacGraphicsDeviceConfiguration()
+            graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: hardware.display.width,
+                heightInPixels: hardware.display.height, pixelsPerInch: hardware.display.pixelsPerInch)]
+            config.graphicsDevices = [graphics]
+            config.keyboards = [hardware.keyboard == .mac ? VZMacKeyboardConfiguration() : VZUSBKeyboardConfiguration()]
+            config.pointingDevices = [hardware.pointer == .trackpad ? VZMacTrackpadConfiguration() : VZUSBScreenCoordinatePointingDeviceConfiguration()]
+        } else {
+            let graphics = VZVirtioGraphicsDeviceConfiguration()
+            graphics.scanouts = [VZVirtioGraphicsScanoutConfiguration(widthInPixels: hardware.display.width, heightInPixels: hardware.display.height)]
+            config.graphicsDevices = [graphics]
+            config.keyboards = [VZUSBKeyboardConfiguration()]
+            config.pointingDevices = [VZUSBScreenCoordinatePointingDeviceConfiguration()]
+        }
         config.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
         if hardware.audioOutputEnabled {
             let sound = VZVirtioSoundDeviceConfiguration()
@@ -169,7 +223,8 @@ final class VMRuntimeService {
                 }
                 directories["Exchange"] = VZSharedDirectory(url: exchange, readOnly: false)
             }
-            let sharing = VZVirtioFileSystemDeviceConfiguration(tag: VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag)
+            let sharing = VZVirtioFileSystemDeviceConfiguration(tag: record.guestOS == .macOS ?
+                VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag : "volumeboot")
             sharing.share = VZMultipleDirectoryShare(directories: directories)
             config.directorySharingDevices = [sharing]
         }
@@ -178,12 +233,85 @@ final class VMRuntimeService {
     }
     #endif
 
+    /// ISO installers run interactively; completion is acknowledged after guest setup and shutdown.
+    func createARMGuest(at folder: URL, guestOS: VMGuestOS, installationMediaURL: URL, diskSizeGiB: Int,
+                        connectivity: VMConnectivitySettings, hardware: VMHardwareSettings,
+                        qemuSettings: VMQEMUSettings? = nil, firmwareCodeURL: URL? = nil,
+                        firmwareVariablesURL: URL? = nil, driverMediaURL: URL? = nil) throws {
+        #if arch(arm64)
+        guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
+        guard guestOS != .macOS else { throw VMGuestError.invalidState }
+        operationInProgress = true
+        defer { operationInProgress = false }
+        let resolved = folder.standardizedFileURL.resolvingSymlinksInPath()
+        guard folder.isFileURL, resolved.path != "/dev", !resolved.path.hasPrefix("/dev/"),
+              resolved.path == folder.standardizedFileURL.path else { throw RuntimeError.unsafeDestination }
+        guard !FileManager.default.fileExists(atPath: folder.path) else { throw ProvisioningError.destinationExists }
+        try VMGuestMedia.verifyISO(installationMediaURL)
+        if let driverMediaURL { try VMGuestMedia.verifyISO(driverMediaURL) }
+        _ = try VMDiskImageStore.capacityBytes(diskSizeGiB, bootDisk: true)
+        try VMHardwarePolicy.verify(hardware, vmFolder: folder,
+            cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
+            maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / VMDiskImageStore.gibibyte))
+        try VMConnectivityPolicy.verify(connectivity, vmFolder: folder,
+            validInterfaces: Set(VZBridgedNetworkInterface.networkInterfaces.map(\.identifier)))
+        if guestOS == .windowsARM {
+            guard qemuSettings != nil, firmwareCodeURL != nil, firmwareVariablesURL != nil else {
+                throw VMGuestError.missingTool("QEMU, swtpm, and AArch64 UEFI firmware")
+            }
+            guard connectivity.networkMode != .bridged, connectivity.sharedFolderPath == nil,
+                  !connectivity.guestToolsEnabled, !hardware.microphoneEnabled else { throw VMGuestError.unsupportedWindowsSettings }
+        }
+        let suppliedDisk = try hardware.bootDiskPath.map { try VMDiskImageLease(url: URL(fileURLWithPath: $0), writable: true) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        var manifest = ManagedVMManifest(version: 3, id: UUID(), createdAt: Date(),
+            diskSizeGiB: suppliedDisk.map { Int($0.info.sizeBytes / VMDiskImageStore.gibibyte) } ?? diskSizeGiB,
+            state: .provisioning, lastFailure: nil, guestOS: guestOS, installationMediaPath: installationMediaURL.path,
+            driverMediaPath: driverMediaURL?.path, qemu: qemuSettings)
+        try VMRegistry.write(manifest, at: folder)
+        do {
+            try VMHardwareStore.save(hardware, to: folder)
+            try VMConnectivityStore.save(connectivity, to: folder)
+            if suppliedDisk == nil { try VMDiskImageStore.create(at: folder.appendingPathComponent("disk.img"), sizeGiB: diskSizeGiB) }
+            if guestOS == .linuxARM {
+                try VZGenericMachineIdentifier().dataRepresentation.write(to: folder.appendingPathComponent("machine-id.bin"), options: .atomic)
+                _ = try VZEFIVariableStore(creatingVariableStoreAt: folder.appendingPathComponent("efi-vars.bin"), options: [])
+            } else if let firmwareCodeURL, let firmwareVariablesURL {
+                try FileManager.default.copyItem(at: firmwareCodeURL, to: folder.appendingPathComponent("firmware-code.fd"))
+                try FileManager.default.copyItem(at: firmwareVariablesURL, to: folder.appendingPathComponent("firmware-vars.fd"))
+            }
+            manifest.state = .installing
+            try VMRegistry.write(manifest, at: folder)
+            if guestOS == .linuxARM { _ = try makeConfiguration(folder: folder, hardware: hardware) }
+        } catch {
+            manifest.state = .failed; manifest.lastFailure = error.localizedDescription
+            try? VMRegistry.write(manifest, at: folder)
+            throw error
+        }
+        #else
+        throw RuntimeError.unsupportedHost
+        #endif
+    }
+
+    func finishARMInstallation(at folder: URL) throws {
+        guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
+        var manifest = try VMRegistry.read(at: folder)
+        guard manifest.guestOS != .macOS, manifest.state == .installing else { throw VMGuestError.invalidState }
+        let hardware = try VMHardwareStore.load(from: folder)
+        try VMHardwarePolicy.verify(hardware, vmFolder: folder)
+        _ = try VMDiskImageStore.inspect(at: hardware.bootDiskURL(in: folder))
+        // An explicit user acknowledgement, not an inferred successful installation.
+        manifest.state = .installed
+        manifest.lastFailure = nil
+        try VMRegistry.write(manifest, at: folder)
+    }
+
     /// Creates a managed VM folder and installs macOS from an Apple IPSW restore image.
     /// Does not mount or modify physical storage devices. Incomplete folders are retained for investigation.
     func provision(at folder: URL, restoreImageURL: URL, diskSizeGiB: Int, connectivity: VMConnectivitySettings = .default,
                    hardware: VMHardwareSettings = .default) async throws {
         #if arch(arm64)
-        guard virtualMachine == nil, !operationInProgress else { throw RuntimeError.busy }
+        guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
         defer { operationInProgress = false }
         let resolvedFolder = folder.standardizedFileURL.resolvingSymlinksInPath()
