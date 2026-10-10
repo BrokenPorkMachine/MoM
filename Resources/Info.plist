@@ -16,5 +16,7 @@
 	<string>15.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VolumeBoot can provide the host microphone to a macOS virtual machine when microphone input is enabled for that VM.</string>
 </dict>
 </plist>

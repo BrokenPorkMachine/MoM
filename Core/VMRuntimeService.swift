@@ -23,14 +23,18 @@ final class VMRuntimeService {
     private(set) var currentFolder: URL?
     private var physicalDiskLease: ReadOnlyPhysicalDiskLease?
 
-    func startExistingVM(at folder: URL, cpuCount: Int, memoryBytes: UInt64, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
+    func startExistingVM(at folder: URL, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
         #if arch(arm64)
         guard virtualMachine == nil else { throw RuntimeError.busy }
         let manifest = try VMRegistry.read(at: folder)
         guard manifest.state == .installed else { throw RuntimeError.incompleteInstallation }
         let connectivity = try VMConnectivityStore.load(from: folder)
         if connectivity.guestToolsEnabled { try HostGuestExchange.createIfNeeded(in: folder) }
-        let config = try makeConfiguration(folder: folder, cpuCount: cpuCount, memoryBytes: memoryBytes, readOnlyDisk: readOnlyDisk)
+        let hardware = try VMHardwareStore.load(from: folder)
+        try VMHardwarePolicy.verify(hardware, vmFolder: folder,
+            cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
+            maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
+        let config = try makeConfiguration(folder: folder, hardware: hardware, readOnlyDisk: readOnlyDisk)
         let vm = VZVirtualMachine(configuration: config)
         virtualMachine = vm
         physicalDiskLease = readOnlyDisk
@@ -60,7 +64,7 @@ final class VMRuntimeService {
         currentFolder = nil
     }
     #if arch(arm64)
-    private func makeConfiguration(folder: URL, cpuCount: Int, memoryBytes: UInt64, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) throws -> VZVirtualMachineConfiguration {
+    private func makeConfiguration(folder: URL, hardware: VMHardwareSettings, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) throws -> VZVirtualMachineConfiguration {
         func file(_ name: String) throws -> URL {
             let url = folder.appendingPathComponent(name)
             guard FileManager.default.fileExists(atPath: url.path) else { throw RuntimeError.missingMetadata(name) }
@@ -79,17 +83,35 @@ final class VMRuntimeService {
         let config = VZVirtualMachineConfiguration()
         config.platform = platform
         config.bootLoader = VZMacOSBootLoader()
-        config.cpuCount = min(max(cpuCount, VZVirtualMachineConfiguration.minimumAllowedCPUCount), VZVirtualMachineConfiguration.maximumAllowedCPUCount)
-        config.memorySize = min(max(memoryBytes, VZVirtualMachineConfiguration.minimumAllowedMemorySize), VZVirtualMachineConfiguration.maximumAllowedMemorySize)
+        config.cpuCount = hardware.cpuCount
+        config.memorySize = UInt64(hardware.memoryGiB) * 1_073_741_824
         let attachment = try VZDiskImageStorageDeviceAttachment(url: try file("disk.img"), readOnly: false)
         config.storageDevices = [VZVirtioBlockDeviceConfiguration(attachment: attachment)]
+        for disk in hardware.additionalDisks {
+            let image = try VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: disk.path), readOnly: disk.readOnly)
+            config.storageDevices.append(VZVirtioBlockDeviceConfiguration(attachment: image))
+        }
         if let readOnlyDisk { config.storageDevices.append(try readOnlyDisk.makeDevice()) }
         let graphics = VZMacGraphicsDeviceConfiguration()
-        graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: 1280, heightInPixels: 800, pixelsPerInch: 110)]
+        graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: hardware.display.width,
+            heightInPixels: hardware.display.height, pixelsPerInch: hardware.display.pixelsPerInch)]
         config.graphicsDevices = [graphics]
-        config.keyboards = [VZMacKeyboardConfiguration()]
-        config.pointingDevices = [VZMacTrackpadConfiguration()]
+        config.keyboards = [hardware.keyboard == .mac ? VZMacKeyboardConfiguration() : VZUSBKeyboardConfiguration()]
+        config.pointingDevices = [hardware.pointer == .trackpad ? VZMacTrackpadConfiguration() : VZUSBScreenCoordinatePointingDeviceConfiguration()]
         config.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
+        if hardware.audioOutputEnabled {
+            let sound = VZVirtioSoundDeviceConfiguration()
+            let output = VZVirtioSoundDeviceOutputStreamConfiguration()
+            output.sink = VZHostAudioOutputStreamSink()
+            var streams: [VZVirtioSoundDeviceStreamConfiguration] = [output]
+            if hardware.microphoneEnabled {
+                let input = VZVirtioSoundDeviceInputStreamConfiguration()
+                input.source = VZHostAudioInputStreamSource()
+                streams.append(input)
+            }
+            sound.streams = streams
+            config.audioDevices = [sound]
+        }
         let connectivity = try VMConnectivityStore.load(from: folder)
         let interfaces = VZBridgedNetworkInterface.networkInterfaces
         try VMConnectivityPolicy.verify(connectivity, vmFolder: folder, validInterfaces: Set(interfaces.map(\.identifier)))
@@ -140,7 +162,8 @@ final class VMRuntimeService {
 
     /// Creates a managed VM folder and installs macOS from an Apple IPSW restore image.
     /// Does not mount or modify physical storage devices. Incomplete folders are retained for investigation.
-    func provision(at folder: URL, restoreImageURL: URL, cpuCount: Int, memoryBytes: UInt64, diskSizeGiB: Int, connectivity: VMConnectivitySettings = .default) async throws {
+    func provision(at folder: URL, restoreImageURL: URL, diskSizeGiB: Int, connectivity: VMConnectivitySettings = .default,
+                   hardware: VMHardwareSettings = .default) async throws {
         #if arch(arm64)
         guard virtualMachine == nil else { throw RuntimeError.busy }
         guard folder.isFileURL && !folder.path.hasPrefix("/dev/") && folder.lastPathComponent != "" else { throw RuntimeError.unsafeDestination }
@@ -157,7 +180,8 @@ final class VMRuntimeService {
         guard let requirement = image.mostFeaturefulSupportedConfiguration else { throw ProvisioningError.noSupportedConfiguration }
         let model = requirement.hardwareModel
         guard model.isSupported else { throw ProvisioningError.noSupportedConfiguration }
-        guard cpuCount >= requirement.minimumSupportedCPUCount, memoryBytes >= requirement.minimumSupportedMemorySize else {
+        let memoryBytes = UInt64(hardware.memoryGiB) * 1_073_741_824
+        guard hardware.cpuCount >= requirement.minimumSupportedCPUCount, memoryBytes >= requirement.minimumSupportedMemorySize else {
             throw ProvisioningError.insufficientResources
         }
         // Exclusive creation: never adopt or overwrite an existing folder.
@@ -166,6 +190,10 @@ final class VMRuntimeService {
         try VMRegistry.write(manifest, at: folder)
         do {
             try VMConnectivityStore.save(connectivity, to: folder)
+            try VMHardwarePolicy.verify(hardware, vmFolder: folder,
+                cpuRange: max(requirement.minimumSupportedCPUCount, VZVirtualMachineConfiguration.minimumAllowedCPUCount)...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
+                maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
+            try VMHardwareStore.save(hardware, to: folder)
             if connectivity.guestToolsEnabled { try HostGuestExchange.createIfNeeded(in: folder) }
             try model.dataRepresentation.write(to: folder.appendingPathComponent("hardware-model.bin"), options: .atomic)
             let identifier = VZMacMachineIdentifier()
@@ -182,7 +210,7 @@ final class VMRuntimeService {
             let handle = try FileHandle(forWritingTo: diskURL)
             defer { try? handle.close() }
             try handle.truncate(atOffset: UInt64(diskSizeGiB) * 1_073_741_824)
-            let config = try makeConfiguration(folder: folder, cpuCount: cpuCount, memoryBytes: memoryBytes)
+            let config = try makeConfiguration(folder: folder, hardware: hardware)
             let vm = VZVirtualMachine(configuration: config)
             virtualMachine = vm
             let macInstaller = VZMacOSInstaller(virtualMachine: vm, restoringFrom: restoreImageURL)

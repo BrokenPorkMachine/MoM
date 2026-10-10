@@ -20,8 +20,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var knownVMs: [(url: URL, record: ManagedVMManifest)] = []
     @Published private(set) var vmRevision = 0
     @Published private(set) var vmStatus = "No VM loaded"
-    @Published var cpuCount = 2
-    @Published var memoryGiB = 4
+    @Published var hardware = VMHardwareSettings.default
+    @Published private(set) var hardwareStatus = "Choose a VM to edit its hardware"
+    @Published private(set) var hardwareLoaded = false
     @Published private(set) var diskPreflightStatus = "Select a device to inspect physical attachment eligibility."
     @Published private(set) var diskPreflightRunning = false
     private let diskPreflight = PhysicalDiskPreflight()
@@ -58,11 +59,44 @@ final class AppModel: ObservableObject {
     func loadConnectivity() {
         guard vmFolderPath.hasPrefix("/") else { connectivityStatus = "Choose a VM folder"; return }
         do {
+            hardware = try VMHardwareStore.load(from: URL(fileURLWithPath: vmFolderPath))
+            hardwareLoaded = true
+            hardwareStatus = "Hardware profile loaded"
             connectivity = try VMConnectivityStore.load(from: URL(fileURLWithPath: vmFolderPath))
             refreshNetworkInterfaces()
             connectivityStatus = "Loaded VM connectivity profile"
             refreshExchange()
         } catch { connectivityStatus = "Load failed: \(error.localizedDescription)" }
+    }
+
+    func saveHardware() {
+        guard vm.virtualMachine == nil, !provisioning else { hardwareStatus = "Stop the VM before changing virtual hardware"; return }
+        guard vmFolderPath.hasPrefix("/") else { hardwareStatus = "Choose an installed VM folder"; return }
+        let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
+        do {
+            try VMHardwarePolicy.verify(hardware, vmFolder: folder,
+                cpuRange: 2...max(2, ProcessInfo.processInfo.processorCount),
+                maximumMemoryGiB: safeMaximumMemoryGiB)
+            try VMHardwareStore.save(hardware, to: folder)
+            hardwareStatus = "Saved · changes apply the next time this VM starts"
+        } catch { hardwareStatus = "Save rejected: \(error.localizedDescription)" }
+    }
+
+    var safeMaximumMemoryGiB: Int {
+        max(4, min(64, Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) - 4))
+    }
+
+    func loadHardwareProfile(for folder: URL) {
+        vmFolderPath = folder.path
+        do {
+            hardware = try VMHardwareStore.load(from: folder)
+            hardwareLoaded = true
+            hardwareStatus = "Hardware profile loaded for \(folder.lastPathComponent)"
+            connectivity = try VMConnectivityStore.load(from: folder)
+            connectivityStatus = "Loaded VM connectivity profile"
+            refreshNetworkInterfaces()
+            refreshExchange()
+        } catch { hardwareStatus = "Load failed: \(error.localizedDescription)"; connectivityStatus = hardwareStatus }
     }
 
     func saveConnectivity() {
@@ -260,8 +294,7 @@ final class AppModel: ObservableObject {
                 vmStatus = "Read-only grant acquired for \(device.identifier); starting guest…"
             }
             do {
-                try await vm.startExistingVM(at: url, cpuCount: cpuCount,
-                    memoryBytes: UInt64(memoryGiB) * 1_073_741_824, readOnlyDisk: grant?.disk)
+                try await vm.startExistingVM(at: url, readOnlyDisk: grant?.disk)
                 activeDiskGrant = grant
             } catch {
                 grant?.releaseAfterVMStops()
@@ -294,6 +327,7 @@ final class AppModel: ObservableObject {
             vmStatus = "Choose a destination folder path and local IPSW"; return
         }
         provisioning = true
+        hardwareLoaded = true
         installProgress = 0
         let progressMonitor = Task { @MainActor in
             while !Task.isCancelled {
@@ -307,10 +341,9 @@ final class AppModel: ObservableObject {
             try await vm.provision(
                 at: URL(fileURLWithPath: vmFolderPath, isDirectory: true),
                 restoreImageURL: URL(fileURLWithPath: restoreImagePath),
-                cpuCount: cpuCount,
-                memoryBytes: UInt64(memoryGiB) * 1_073_741_824,
                 diskSizeGiB: diskSizeGiB,
-                connectivity: connectivity
+                connectivity: connectivity,
+                hardware: hardware
             )
             installProgress = 1
             vmStatus = "Installation completed. Start the managed VM to boot macOS."

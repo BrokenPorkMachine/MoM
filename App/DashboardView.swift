@@ -4,6 +4,7 @@ import AppKit
 struct DashboardView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedTab = 0
+    @State private var selectedVMSection = 0
 
     var body: some View {
         NavigationSplitView {
@@ -129,9 +130,25 @@ struct DashboardView: View {
 
     private var managedVM: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Managed virtual machine").font(.largeTitle.bold())
-            Text("Create a managed macOS guest from an Apple IPSW restore image, or start a previously installed VM.")
-                .foregroundStyle(.secondary)
+            HStack {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Managed virtual machine").font(.largeTitle.bold())
+                    Text("Create a macOS guest or tune the hardware for an existing instance.").foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "cpu.fill").font(.system(size: 34)).foregroundStyle(.blue.gradient)
+                    .padding(18).background(.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: 18))
+            }
+            Picker("VM workspace", selection: $selectedVMSection) {
+                Text("Overview").tag(0)
+                Text("Hardware").tag(1)
+            }.pickerStyle(.segmented).frame(maxWidth: 320)
+            if selectedVMSection == 0 { vmOverview } else { hardwareConfiguration }
+        }
+    }
+
+    private var vmOverview: some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 TextField("VM bundle folder", text: $model.vmFolderPath)
                 Button("Choose…") {
@@ -152,8 +169,11 @@ struct DashboardView: View {
                 }
             }
             Stepper("Virtual disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...512, step: 16)
-            Stepper("Virtual CPUs: \(model.cpuCount)", value: $model.cpuCount, in: 2...8)
-            Stepper("Memory: \(model.memoryGiB) GiB", value: $model.memoryGiB, in: 2...16)
+            HStack(spacing: 12) {
+                Label("\(model.hardware.cpuCount) CPU cores", systemImage: "cpu")
+                Label("\(model.hardware.memoryGiB) GiB memory", systemImage: "memorychip")
+                Label(model.hardware.display.title, systemImage: "display")
+            }.font(.subheadline).foregroundStyle(.secondary)
             Toggle("Attach selected BLANK external disk as read-only secondary storage", isOn: $model.attachDisposableDisk)
             Text("Requires signed and approved root daemon. Only disposable, unmounted, unpartitioned external disks are accepted. The selected physical disk is NEVER the VM boot disk.")
                 .font(.caption).foregroundStyle(.orange)
@@ -186,18 +206,193 @@ struct DashboardView: View {
                                 Text(entry.record.state.rawValue).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("Select") { model.vmFolderPath = entry.url.path; model.loadConnectivity() }
+                            Button("Select") { model.loadHardwareProfile(for: entry.url) }
                         }
                     }
                 }
             }
             GroupBox("Guest console") {
-                VMConsoleView(virtualMachine: model.vm.virtualMachine)
+                VMConsoleView(virtualMachine: model.vm.virtualMachine, hardware: model.hardware)
                     .id(model.vmRevision)
                     .frame(minWidth: 550, minHeight: 300)
             }
             Text("Installation requires a NEW destination folder (must not already exist), compatible Apple IPSW, and sufficient disk space. Failures retain incomplete VM data; never select a physical disk device path.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var hardwareConfiguration: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Instance hardware").font(.title2.bold())
+                        Text("Tune this Mac’s virtual hardware. Changes are saved with the selected VM.")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Menu("Presets") {
+                        Button("Balanced · 4 cores / 8 GB") { applyHardwarePreset(cpu: 4, memory: 8) }
+                        Button("Performance · 8 cores / 16 GB") { applyHardwarePreset(cpu: 8, memory: 16) }
+                        Button("Lightweight · 2 cores / 4 GB") { applyHardwarePreset(cpu: 2, memory: 4) }
+                    }
+                }
+                HStack {
+                    TextField("Selected VM folder", text: $model.vmFolderPath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Load profile") { model.loadConnectivity() }
+                        .disabled(model.vmFolderPath.isEmpty)
+                }
+                HStack(spacing: 12) {
+                    metricCard("PROCESSING", value: "\(model.hardware.cpuCount) cores", icon: "cpu.fill", tint: .blue)
+                    metricCard("MEMORY", value: "\(model.hardware.memoryGiB) GB", icon: "memorychip.fill", tint: .purple)
+                    metricCard("DISPLAY", value: model.hardware.display.title, icon: "display", tint: .orange)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeading("Identity", subtitle: "A friendly name for this VM instance")
+                        TextField("For example, macOS Development", text: $model.hardware.displayName)
+                            .textFieldStyle(.roundedBorder)
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionHeading("Compute", subtitle: "Choose how much of your Mac to share with the guest")
+                        HStack(spacing: 24) {
+                            VStack(alignment: .leading, spacing: 9) {
+                                Label("Virtual CPU", systemImage: "cpu")
+                                Stepper("\(model.hardware.cpuCount) cores", value: $model.hardware.cpuCount, in: 2...max(2, ProcessInfo.processInfo.processorCount), step: 1)
+                                Text("Host has \(ProcessInfo.processInfo.processorCount) logical cores").font(.caption).foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 9) {
+                                Label("Memory", systemImage: "memorychip")
+                                Stepper("\(model.hardware.memoryGiB) GiB", value: $model.hardware.memoryGiB, in: 4...model.safeMaximumMemoryGiB, step: 2)
+                                Text("Leave room for macOS and other apps").font(.caption).foregroundStyle(.secondary)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 14) {
+                        sectionHeading("Display", subtitle: "Set the guest’s starting resolution")
+                        Label("Apple virtual Mac display · host accelerated where supported", systemImage: "sparkles")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Picker("Resolution", selection: $model.hardware.display) {
+                            ForEach(VMDisplayPreset.allCases) { preset in Text(preset.title).tag(preset) }
+                        }.pickerStyle(.segmented)
+                        Toggle("Resize guest display with the VM window", isOn: $model.hardware.automaticallyResizeDisplay)
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 13) {
+                        sectionHeading("Sound", subtitle: "Virtual audio devices presented to macOS")
+                        Toggle("Audio output", isOn: $model.hardware.audioOutputEnabled)
+                        Toggle("Microphone input", isOn: $model.hardware.microphoneEnabled)
+                            .disabled(!model.hardware.audioOutputEnabled)
+                        if model.hardware.microphoneEnabled {
+                            Label("The guest may request microphone access from macOS.", systemImage: "mic.badge.waveform")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 13) {
+                        sectionHeading("Device passthrough", subtitle: "Host hardware access follows Apple’s virtualization APIs")
+                        Label("Apple Neural Engine passthrough is not exposed by Virtualization.framework. Guests cannot claim the host ANE directly.", systemImage: "cpu")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Label("Physical GPU passthrough is not available for macOS guests. Apple’s Mac graphics device is managed by the host virtualization framework.", systemImage: "display")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Label("USB accessory passthrough is available only on macOS 27+ through Apple’s AccessoryAccess flow; this app’s deployment target is macOS 15.", systemImage: "cable.connector")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 13) {
+                        sectionHeading("Input", subtitle: "Choose how keyboard and pointer input appears to the guest")
+                        Picker("Keyboard", selection: $model.hardware.keyboard) {
+                            ForEach(VMKeyboardKind.allCases) { kind in Text(kind.title).tag(kind) }
+                        }
+                        Picker("Pointing device", selection: $model.hardware.pointer) {
+                            ForEach(VMPointerKind.allCases) { kind in Text(kind.title).tag(kind) }
+                        }
+                        Toggle("Capture system shortcuts in the VM", isOn: $model.hardware.capturesSystemKeys)
+                    }.padding(4)
+                }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 13) {
+                        HStack {
+                            sectionHeading("Additional disk images", subtitle: "Attach .img or .raw files as secondary virtual drives")
+                            Spacer()
+                            Button { addHardwareDisk() } label: { Label("Add disk", systemImage: "plus") }
+                        }
+                        if model.hardware.additionalDisks.isEmpty {
+                            ContentUnavailableView("No extra disks", systemImage: "externaldrive", description: Text("The VM’s main disk is always attached automatically."))
+                                .frame(height: 100)
+                        } else {
+                            ForEach($model.hardware.additionalDisks) { $disk in
+                                HStack(spacing: 12) {
+                                    Image(systemName: "externaldrive.fill").foregroundStyle(.blue)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(URL(fileURLWithPath: disk.path).lastPathComponent).font(.subheadline.weight(.medium))
+                                        Text(disk.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                    }
+                                    Spacer()
+                                    Toggle("Read only", isOn: $disk.readOnly).toggleStyle(.switch).labelsHidden()
+                                    Button(role: .destructive) { model.hardware.additionalDisks.removeAll { $0.id == disk.id } } label: {
+                                        Image(systemName: "trash")
+                                    }.buttonStyle(.borderless)
+                                }.padding(10).background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
+                        Text("Disk images only. Raw device paths and files inside the VM bundle are rejected.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.padding(4)
+                }
+                HStack {
+                    Image(systemName: model.hardwareLoaded ? "checkmark.circle.fill" : "info.circle.fill")
+                        .foregroundStyle(model.hardwareLoaded ? .green : .secondary)
+                    Text(model.hardwareStatus).font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Save hardware") { model.saveHardware() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!model.hardwareLoaded || model.vm.virtualMachine != nil || model.provisioning)
+                }.padding(.vertical, 4)
+                Text("Hardware changes apply on the next VM start. Provisioning uses the current hardware profile; after installation, each instance has its own saved profile.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func applyHardwarePreset(cpu: Int, memory: Int) {
+        model.hardware.cpuCount = min(cpu, max(2, ProcessInfo.processInfo.processorCount))
+        model.hardware.memoryGiB = min(memory, max(4, min(64, Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) - 4)))
+    }
+
+    private func metricCard(_ title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Image(systemName: icon).font(.title3).foregroundStyle(tint)
+            Text(title).font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.1).foregroundStyle(.secondary)
+            Text(value).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
+            .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func sectionHeading(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.headline)
+            Text(subtitle).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func addHardwareDisk() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "img")!, .init(filenameExtension: "raw")!]
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            model.hardware.additionalDisks.append(VMAdditionalDisk(path: url.path))
         }
     }
 
