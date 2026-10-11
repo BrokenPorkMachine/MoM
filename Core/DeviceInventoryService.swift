@@ -14,7 +14,7 @@ struct DeviceInventoryService: Sendable {
     }
 
     func listDevices() async throws -> [StorageDevice] {
-        try await Task.detached(priority: .utility) { try Self.scanSync() }.value
+        try await Self.scan()
     }
 
     private static func diskutil(_ arguments: [String]) throws -> [String: Any] {
@@ -38,13 +38,17 @@ struct DeviceInventoryService: Sendable {
         return dict
     }
 
-    private static func scanSync() throws -> [StorageDevice] {
+    private static func scan() async throws -> [StorageDevice] {
         let root = try DiskutilProcess.propertyList(["list", "-plist"])
         guard let names = root["AllDisks"] as? [String] else { throw InventoryError.malformedResult }
         // Device identifiers come from diskutil itself, never arbitrary user input.
         // Enumerating diskutil metadata is intentionally read-only and does not imply bootability.
-        return names.compactMap { name in
-            guard let entry = try? diskutil(["info", "-plist", name]) else { return nil }
+        // Bound concurrent subprocesses so large host inventories do not overwhelm diskutil.
+        let concurrency = min(8, max(2, ProcessInfo.processInfo.processorCount))
+        let records: [StorageDevice?] = try await TaskDispatchQueue.map(names, maxConcurrent: concurrency,
+            priority: { name in name == "disk0" ? 0 : 1 },
+            resourceKey: { "diskutil:\($0)" }) { name in
+            guard let entry = try? Self.diskutil(["info", "-plist", name]) else { return nil }
             let string: (String) -> String = { entry[$0] as? String ?? "" }
             let writable = entry["Writable"] as? Bool ?? false
             let size = (entry["TotalSize"] as? NSNumber)?.uint64Value ?? 0
@@ -57,5 +61,6 @@ struct DeviceInventoryService: Sendable {
                                  isInternal: entry["Internal"] as? Bool ?? false,
                                  isWritable: writable, sizeBytes: size)
         }
+        return records.compactMap { $0 }
     }
 }

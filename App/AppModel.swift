@@ -364,19 +364,24 @@ final class AppModel: ObservableObject {
         guard !scanInProgress else { return }
         scanInProgress = true
         defer { scanInProgress = false }
+        async let deviceScan = inventory.listDevices()
+        async let topologyScan = apfsInspector.inspect()
         do {
-            devices = try await inventory.listDevices()
+            devices = try await deviceScan
             status = "Found \(devices.count) storage records"
-            do {
-                topology = try await apfsInspector.inspect()
-                installations = MacOSInstallationDetector.detect(topology)
-                apfsStatus = "\(topology.containers.count) APFS containers, \(topology.containers.reduce(0) { $0 + $1.volumes.count }) volumes"
-            } catch {
-                topology = .empty
-                installations = []
-                apfsStatus = "APFS scan unavailable: \(error.localizedDescription)"
-            }
-        } catch { devices = []; topology = .empty; installations = []; status = "Inventory failed: \(error.localizedDescription)" }
+        } catch {
+            devices = []
+            status = "Inventory failed: \(error.localizedDescription)"
+        }
+        do {
+            topology = try await topologyScan
+            installations = MacOSInstallationDetector.detect(topology)
+            apfsStatus = "\(topology.containers.count) APFS containers, \(topology.containers.reduce(0) { $0 + $1.volumes.count }) volumes"
+        } catch {
+            topology = .empty
+            installations = []
+            apfsStatus = "APFS scan unavailable: \(error.localizedDescription)"
+        }
     }
 
     func checkDiskBroker() async {

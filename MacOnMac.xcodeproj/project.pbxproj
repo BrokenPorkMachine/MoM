@@ -47,6 +47,7 @@
 		BBE1BFE790269D3AD4B1B04A /* DiskAccessContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841199347F5A4668C3B77F55 /* DiskAccessContract.swift */; };
 		BF89FBE3BB03D0BD316811AF /* PhysicalDiskSafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F6B58CE6C64D63B510745D /* PhysicalDiskSafetyPolicy.swift */; };
 		C929073242C10903B93CC284 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9489A210FF7F547BBAB2CA1D /* Diagnostics.swift */; };
+		C2A14D9E7B8F4A13A73C1001 /* TaskDispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A14D9E7B8F4A13A73C1002 /* TaskDispatchQueue.swift */; };
 		D971F0F712FD7EB50111C5F1 /* HostGuestExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A7941C9746EEF9A9B2C219 /* HostGuestExchange.swift */; };
 		E1F93836DFBE9EB337203E2F /* VMRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E59D710C5F553400C22722 /* VMRuntimeService.swift */; };
 		E2CF7B5E91001A43B1FBC2C0 /* VMGuest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67A34DFE1A38884824B11B29 /* VMGuest.swift */; };
@@ -131,6 +132,7 @@
 		BA903C80E53EADB2F17BC689 /* CompatibilityEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompatibilityEngine.swift; sourceTree = "<group>"; };
 		BC9884F9E5E075D7CB560380 /* MacOSInstallationDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSInstallationDetector.swift; sourceTree = "<group>"; };
 		C0F6CAFFB437979F67DCA255 /* VolumeBootApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBootApp.swift; sourceTree = "<group>"; };
+		C2A14D9E7B8F4A13A73C1002 /* TaskDispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDispatchQueue.swift; sourceTree = "<group>"; };
 		C4AAC36B6D7DCA37629DEFD7 /* DiskLeaseStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskLeaseStateMachine.swift; sourceTree = "<group>"; };
 		C9FC87CE5480ED2DBF4AB53D /* GuestToolsProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestToolsProtocol.swift; sourceTree = "<group>"; };
 		CDCB0508DDAD35053E6A91AF /* VMReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMReadiness.swift; sourceTree = "<group>"; };
@@ -249,6 +251,7 @@
 				A4356CE67EF32F2DEFB0A7CE /* PrivilegedBrokerClient.swift */,
 				6C152568F8438923F2C34FBF /* ReadOnlyGrantPolicy.swift */,
 				150A9EBA6526D68739670866 /* StorageDevice.swift */,
+				C2A14D9E7B8F4A13A73C1002 /* TaskDispatchQueue.swift */,
 				57BA3CED236A350CDBE04E8B /* VMConnectivity.swift */,
 				E3C7D5A45BE6A77343A37953 /* VMHardware.swift */,
 				97E59D710C5F553400C22722 /* VMRuntimeService.swift */,
@@ -459,6 +462,7 @@
 				B0B2A1E589D4D9F84EF86C4F /* PrivilegedBrokerClient.swift in Sources */,
 				E707B9A0326DBB0E9E645E2D /* ReadOnlyGrantPolicy.swift in Sources */,
 				729CBF71B484B766F1674CBF /* StorageDevice.swift in Sources */,
+				C2A14D9E7B8F4A13A73C1001 /* TaskDispatchQueue.swift in Sources */,
 				0857530836A0F6097B7A6BE7 /* VMConnectivity.swift in Sources */,
 				F26F4A9EB24424A25B986E99 /* VMHardware.swift in Sources */,
 				E1F93836DFBE9EB337203E2F /* VMRuntimeService.swift in Sources */,

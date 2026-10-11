@@ -9,6 +9,7 @@ python3 Tests/ProjectStructureTests.py
 ./Scripts/test-grant-policy.sh
 ./Scripts/test-topology-proof.sh
 ./Scripts/test-connectivity.sh
+./Scripts/test-task-dispatch.sh
 ./Scripts/test-disk-images.sh
 ./Scripts/test-arm-guests.sh
 ./Scripts/test-guest-host-e2e.sh
