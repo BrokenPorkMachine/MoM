@@ -43,6 +43,7 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .animation(.easeInOut(duration: 0.16), value: section)
         .onChange(of: model.vmRevision) { _, _ in if model.vm.hasSession { section = .console } }
         .onChange(of: model.vmFolderPath) { _, _ in if !model.vm.hasSession { section = .overview } }
     }
@@ -100,6 +101,41 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
                 if !model.knownVMs.isEmpty { library }
             }.padding(.bottom, 16)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.currentManifest == nil { setupFooter }
+        }
+    }
+
+    private var setupFooter: some View {
+        HStack(spacing: 12) {
+            if model.provisioning {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "bolt.fill").foregroundStyle(Color.accentColor)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(footerTitle)
+                    .font(.callout.weight(.semibold)).lineLimit(1).textSelection(.enabled)
+                if model.provisioning && model.guestOS == .macOS {
+                    ProgressView(value: model.installProgress).frame(maxWidth: 220)
+                } else if !model.provisioning {
+                    Text("Your configuration is saved locally on this Mac.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 12)
+            Button { installGuest() } label: {
+                Label(model.guestOS == .macOS ? "Install macOS" : "Create VM", systemImage: "sparkles")
+            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.canCreateVM)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .top) { Rectangle().fill(.primary.opacity(0.08)).frame(height: 1) }
+    }
+
+    private var footerTitle: String {
+        if model.provisioning { return "Working on your VM" }
+        if model.canCreateVM { return "Ready to create" }
+        return "Choose an installer and destination"
     }
 
     private func existingOverview(_ record: ManagedVMManifest) -> some View {
@@ -111,7 +147,8 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
                 WorkspaceMetric(title: "Network", value: model.connectivity.networkMode == .nat ? "NAT" : model.connectivity.networkMode.rawValue.capitalized, symbol: "network")
             }
             WorkspaceCard(title: "Workspace", subtitle: "The VM folder keeps its identity, settings, and installation state.") {
-                Text(model.vmFolderPath).font(.callout.monospaced()).textSelection(.enabled)
+                Text(model.vmFolderPath).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
                 HStack {
                     Button("Reveal in Finder") { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: model.vmFolderPath) }
                     Button("Validate configuration") { model.validateVMConfiguration() }
@@ -152,46 +189,58 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
     }
 
     private var newVMSetup: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            WorkspaceCard(title: "Create a virtual machine", subtitle: "Choose an operating system and local installation media. Your workspace will be kept in its own folder.") {
-                Picker("Operating system", selection: Binding(get: { model.guestOS }, set: { model.selectNewGuest($0) })) {
-                    ForEach(VMGuestOS.allCases) { Text($0.title).tag($0) }
-                }.pickerStyle(.segmented)
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Your next machine starts here")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .tracking(-0.7)
+                Text("Choose a guest, point to its installer, and MacOnMac will take care of the workspace.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }.padding(.horizontal, 3).padding(.top, 4)
+
+            WorkspaceCard(title: "01  ·  Choose a guest", subtitle: "Native Apple virtualization for macOS and Linux; QEMU for Windows ARM.") {
+                HStack(spacing: 10) {
+                    ForEach(VMGuestOS.allCases) { guest in
+                        GuestChoiceCard(guest: guest, selected: model.guestOS == guest) {
+                            model.selectNewGuest(guest)
+                        }
+                    }
+                }
+            }.disabled(model.isVMInUse)
+
+            WorkspaceCard(title: "02  ·  Installation and location", subtitle: "Your VM is stored locally in a dedicated folder.") {
                 WorkspacePathField(title: "Workspace destination", placeholder: "Choose a new folder", path: $model.vmFolderPath) { chooseDestination() }
                 if !model.vmFolderPath.isEmpty && FileManager.default.fileExists(atPath: model.vmFolderPath) {
-                    WorkspaceNotice(text: "This destination already exists. Choose a new folder, or use Open VM to load an existing workspace.", symbol: "exclamationmark.triangle", tint: .orange)
+                    WorkspaceNotice(text: "This folder already exists. Choose a new destination or open it as an existing VM.", symbol: "exclamationmark.triangle", tint: .orange)
                 }
                 mediaControls
             }.disabled(model.isVMInUse)
-            WorkspaceCard(title: "Resources", subtitle: "Keep memory available for macOS and other applications.") {
-                HStack(spacing: 20) {
-                    Stepper("\(model.hardware.cpuCount) CPU cores", value: $model.hardware.cpuCount, in: 2...model.maximumCPUCount)
-                    Stepper("\(model.hardware.memoryGiB) GiB memory", value: $model.hardware.memoryGiB, in: 4...model.safeMaximumMemoryGiB)
-                    Stepper("\(model.diskSizeGiB) GiB boot disk", value: $model.diskSizeGiB, in: 64...2048, step: 16)
-                        .disabled(model.hardware.bootDiskPath != nil)
+
+            WorkspaceCard(title: "03  ·  Performance profile", subtitle: "Tune resources now; change them later without rebuilding the VM.") {
+                HStack {
+                    Label("Quick profile", systemImage: "slider.horizontal.3").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    Spacer()
+                    Menu("Choose profile") {
+                        Button("Balanced · 4 CPU / 8 GiB") { applyQuickProfile(cpu: 4, memory: 8) }
+                        Button("High performance · max available") { applyQuickProfile(cpu: model.maximumCPUCount, memory: model.safeMaximumMemoryGiB) }
+                        Button("Lightweight · 2 CPU / 4 GiB") { applyQuickProfile(cpu: 2, memory: 4) }
+                    }
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { resourceControls }
+                    VStack(spacing: 10) { resourceControls }
                 }
                 if let path = model.hardware.bootDiskPath {
-                    WorkspaceNotice(text: "Installation target: \(path). Installing may erase existing data.", symbol: "externaldrive", tint: .orange)
+                    WorkspaceNotice(text: "Install target: \(path). Installation may erase existing data.", symbol: "externaldrive", tint: .orange)
                 }
                 HStack {
                     Button("Advanced hardware") { section = .hardware }
-                    Button("Use a disk image") { section = .disks }
+                    Button("Manage disk images") { section = .disks }
                     Spacer()
-                    Text("Raw disk · 64 GiB minimum").font(.caption).foregroundStyle(.secondary)
+                    Label("Optimized for Apple Silicon", systemImage: "bolt.fill")
+                        .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 }
             }.disabled(model.isVMInUse)
-            HStack(spacing: 14) {
-                if model.provisioning { ProgressView().controlSize(.small) }
-                Text(model.vmStatus).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                Spacer()
-                Button { installGuest() } label: {
-                    Label(model.guestOS == .macOS ? "Install macOS" : "Create and start installer", systemImage: "plus.circle.fill")
-                }.buttonStyle(.borderedProminent).controlSize(.large)
-                    .disabled(!model.canCreateVM)
-            }
-            if model.provisioning && model.guestOS == .macOS {
-                ProgressView(value: model.installProgress) { Text("Installing macOS") }
-            }
         }
     }
 
@@ -245,18 +294,53 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
         WorkspaceCard(title: "VM library", subtitle: "Recent workspaces and VMs in the selected folder’s parent directory.") {
             ForEach(model.knownVMs, id: \.url.path) { entry in
                 HStack(spacing: 12) {
-                    Image(systemName: "desktopcomputer").foregroundStyle(.secondary)
+                    Image(systemName: guestSymbol(entry.record.guestOS)).foregroundStyle(Color.accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(entry.url.lastPathComponent).font(.callout.weight(.semibold)).help(entry.url.path)
                         Text("\(entry.record.guestOS.title) · \(entry.record.state == .installed ? "Installed" : entry.record.state.rawValue.capitalized)")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(entry.url.path == model.vmFolderPath ? "Selected" : "Open") {
-                        if WorkspaceActions.allowDiscard(model) { model.loadHardwareProfile(for: entry.url) }
-                    }.disabled(!model.canSelectVM || entry.url.path == model.vmFolderPath)
+                    if entry.url.path == model.vmFolderPath {
+                        WorkspaceStatus(text: "Selected", symbol: "checkmark.circle.fill", tint: .green)
+                    } else {
+                        Button("Open") {
+                            if WorkspaceActions.allowDiscard(model) { model.loadHardwareProfile(for: entry.url) }
+                        }.buttonStyle(.bordered).disabled(!model.canSelectVM)
+                    }
                 }.padding(.vertical, 3)
             }
+        }
+    }
+
+    @ViewBuilder private var resourceControls: some View {
+        ResourceStepper(title: "CPU", symbol: "cpu", value: "\(model.hardware.cpuCount) cores") {
+            Stepper("CPU cores", value: $model.hardware.cpuCount, in: 2...model.maximumCPUCount)
+                .labelsHidden().accessibilityLabel("CPU cores")
+        }
+        ResourceStepper(title: "Memory", symbol: "memorychip", value: "\(model.hardware.memoryGiB) GiB") {
+            Stepper("Memory", value: $model.hardware.memoryGiB, in: 4...model.safeMaximumMemoryGiB, step: 2)
+                .labelsHidden().accessibilityLabel("Memory")
+        }
+        ResourceStepper(title: "Boot disk", symbol: "internaldrive", value: "\(model.diskSizeGiB) GiB") {
+            Stepper("Boot disk size", value: $model.diskSizeGiB, in: 64...2048, step: 16)
+                .labelsHidden().accessibilityLabel("Boot disk size")
+                .disabled(model.hardware.bootDiskPath != nil)
+        }
+    }
+
+    private func applyQuickProfile(cpu: Int, memory: Int) {
+        model.hardware.cpuCount = min(max(2, cpu), model.maximumCPUCount)
+        model.hardware.memoryGiB = min(max(4, memory), model.safeMaximumMemoryGiB)
+    }
+
+    private func guestSymbol(_ guest: VMGuestOS) -> String {
+        switch guest {
+        case .macOS: "apple.logo"
+        case .linuxARM: "terminal.fill"
+        case .windowsARM: "rectangle.on.rectangle"
         }
     }
 

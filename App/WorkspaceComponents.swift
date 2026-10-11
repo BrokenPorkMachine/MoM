@@ -6,16 +6,17 @@ struct WorkspaceCard<Content: View>: View {
     var subtitle: String? = nil
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 15) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                if let subtitle { Text(subtitle).font(.callout).foregroundStyle(.secondary) }
+                Text(title).font(.headline.weight(.semibold))
+                if let subtitle { Text(subtitle).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             }
             content
         }
         .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.primary.opacity(0.08), lineWidth: 1))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.primary.opacity(0.075), lineWidth: 1))
+        .shadow(color: .black.opacity(0.035), radius: 14, y: 5)
     }
 }
 
@@ -36,13 +37,98 @@ struct WorkspaceMetric: View {
     let value: String
     let symbol: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: symbol).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-            Text(value).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
-        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.primary.opacity(0.07), lineWidth: 1))
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 38, height: 38)
+                .background(Color.accentColor.opacity(0.11), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title.uppercased()).font(.caption2.weight(.bold)).tracking(0.6).foregroundStyle(.secondary)
+                Text(value).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.07), lineWidth: 1))
             .accessibilityElement(children: .combine)
+    }
+}
+
+struct GuestChoiceCard: View {
+    let guest: VMGuestOS
+    let selected: Bool
+    let action: () -> Void
+
+    private var symbol: String {
+        switch guest {
+        case .macOS: "apple.logo"
+        case .linuxARM: "terminal.fill"
+        case .windowsARM: "rectangle.on.rectangle"
+        }
+    }
+
+    private var detail: String {
+        switch guest {
+        case .macOS: "Apple Virtualization"
+        case .linuxARM: "ARM64 · EFI"
+        case .windowsARM: "QEMU · ARM64"
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    Image(systemName: symbol).font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(selected ? Color.white : Color.accentColor)
+                        .frame(width: 42, height: 42)
+                        .background(selected ? Color.white.opacity(0.18) : Color.accentColor.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Spacer()
+                    if selected { Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.white) }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(guest.title).font(.headline.weight(.semibold))
+                    Text(detail).font(.caption).foregroundStyle(selected ? .white.opacity(0.78) : .secondary)
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: selected
+                            ? [Color.accentColor, Color(red: 0.25, green: 0.39, blue: 0.88)]
+                            : [Color(nsColor: .controlBackgroundColor), Color(nsColor: .controlBackgroundColor)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityLabel("\(guest.title), \(detail)\(selected ? ", selected" : "")")
+    }
+}
+
+struct ResourceStepper<Controls: View>: View {
+    let title: String
+    let symbol: String
+    let value: String
+    @ViewBuilder let controls: Controls
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.accentColor)
+                .frame(width: 34, height: 34).background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.caption).foregroundStyle(.secondary)
+                Text(value).font(.callout.weight(.semibold)).monospacedDigit()
+            }
+            Spacer(minLength: 0)
+            controls
+        }
+        .padding(11).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

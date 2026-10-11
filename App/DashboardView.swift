@@ -15,10 +15,11 @@ struct DashboardView: View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "square.stack.3d.up.fill").font(.title2).foregroundColor(Color(red: 0.15, green: 0.5, blue: 0.98))
+                    Image(systemName: "square.stack.3d.up.fill").font(.title2).foregroundStyle(
+                        LinearGradient(colors: [Color.accentColor, Color.cyan], startPoint: .topLeading, endPoint: .bottomTrailing))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("VolumeBoot").font(.headline)
-                        Text("Virtual workspace manager").font(.caption).foregroundStyle(.secondary)
+                        Text("MoM: MacOnMac").font(.headline.weight(.bold))
+                        Text("Virtual machine studio").font(.caption).foregroundStyle(.secondary)
                     }
                 }.foregroundColor(sidebarForeground).padding(20)
                 ScrollView {
@@ -40,7 +41,7 @@ struct DashboardView: View {
                     Text("Local virtualization").font(.caption).foregroundStyle(.secondary)
                 }.foregroundColor(sidebarForeground).padding(20)
             }
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(.ultraThinMaterial)
             .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
         } detail: {
             Group {
@@ -101,12 +102,30 @@ struct DashboardView: View {
     private var inventory: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Storage inventory").font(.title2.bold())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Storage inventory").font(.system(.title2, design: .rounded).weight(.bold))
+                    Text("A live view of disks and APFS volumes on this Mac.").font(.callout).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Rescan") { Task { await model.scan() } }.disabled(model.scanInProgress)
+                Button { Task { await model.scan() } } label: {
+                    Label(model.scanInProgress ? "Scanning" : "Refresh", systemImage: model.scanInProgress ? "arrow.trianglehead.2.clockwise" : "arrow.clockwise")
+                }.buttonStyle(.bordered).disabled(model.scanInProgress)
             }
-            Text(model.status).foregroundStyle(.secondary)
-            Text(model.apfsStatus).font(.subheadline).foregroundStyle(.secondary)
+            if model.scanInProgress {
+                HStack(spacing: 12) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Prioritized parallel scan").font(.callout.weight(.semibold))
+                        Text("Querying host storage and APFS together with bounded workers.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }.padding(13).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            HStack(spacing: 10) {
+                Label(model.status, systemImage: "externaldrive").foregroundStyle(.secondary)
+                Text("·").foregroundStyle(.tertiary)
+                Label(model.apfsStatus, systemImage: "square.stack.3d.up").foregroundStyle(.secondary)
+            }.font(.caption)
             Table(model.devices, selection: $model.selectedDeviceID) {
                 TableColumn("Device", value: \.identifier)
                 TableColumn("Name", value: \.name)
@@ -219,7 +238,8 @@ struct DashboardView: View {
                 }
                 HStack {
                     Text(model.vmFolderPath.isEmpty ? "New workspace" : model.vmFolderPath)
-                        .font(.callout.monospaced()).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                        .font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
                     Button("Reload saved profile…") { if WorkspaceActions.allowDiscard(model) { model.loadConnectivity() } }.disabled(!model.canSelectVM || model.currentManifest == nil)
                         .disabled(model.vmFolderPath.isEmpty)
                 }

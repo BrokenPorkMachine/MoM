@@ -21,6 +21,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac
         PRODUCT_NAME: MacOnMac
+        INFOPLIST_KEY_CFBundleDisplayName: "MoM: MacOnMac"
         INFOPLIST_FILE: Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
     postBuildScripts:

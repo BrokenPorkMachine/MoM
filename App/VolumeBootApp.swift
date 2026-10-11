@@ -6,7 +6,7 @@ struct VolumeBootApp: App {
     @StateObject private var model = AppModel(preferences: UserDefaults.standard)
     @NSApplicationDelegateAdaptor(VolumeBootApplicationDelegate.self) private var appDelegate
     var body: some Scene {
-        WindowGroup("VolumeBoot") {
+        WindowGroup("MoM: MacOnMac") {
             DashboardView().environmentObject(model)
                 .frame(minWidth: 1000, minHeight: 640)
                 .onAppear { appDelegate.model = model }
