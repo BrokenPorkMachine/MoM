@@ -1,4 +1,4 @@
-# VolumeBoot — Virtual workspace manager
+# MacOnMac — Virtual workspace manager
 
 The native workspace separates setup, console, hardware, disks, and network, with recent VM persistence, readiness checks, unsaved-change protection, graceful shutdown, and confirmed force stop. See the [correctness/UI audit](Docs/AUDIT_AND_POLISH.md) and run `Scripts/preview-ui.sh` for layout previews.
 
