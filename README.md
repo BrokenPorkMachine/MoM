@@ -1,8 +1,10 @@
-# VolumeBoot — Disk images and console input
+# VolumeBoot — Virtual workspace manager
 
-**Managed VM** installs and runs macOS from Apple IPSW files, ARM Linux from an AArch64 ISO using Apple Virtualization.framework, and Windows ARM from an ARM64 ISO using QEMU/HVF with persistent UEFI and TPM 2.0. Windows requires QEMU 9.2+ and swtpm. See [ARM guest setup](Docs/ARM_GUESTS.md).
+The native workspace separates setup, console, hardware, disks, and network, with recent VM persistence, readiness checks, unsaved-change protection, graceful shutdown, and confirmed force stop. See the [correctness/UI audit](Docs/AUDIT_AND_POLISH.md) and run `Scripts/preview-ui.sh` for layout previews.
 
-**Managed VM → Disks** creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable installation/boot images. **Guest console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default) for macOS/Linux. Windows uses QEMU’s console and Control + Option + G. See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md).
+**Virtual machines** installs and runs macOS from Apple IPSW files, ARM Linux from an AArch64 ISO using Apple Virtualization.framework, and Windows ARM from an ARM64 ISO using QEMU/HVF with persistent UEFI and TPM 2.0. Windows requires QEMU 9.2+ and swtpm. See [ARM guest setup](Docs/ARM_GUESTS.md).
+
+**Virtual machines → Disks** creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable installation/boot images. **Console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default) for macOS/Linux. Windows uses QEMU’s console and Control + Option + G. See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md).
 
 Run `Scripts/test-disk-images.sh` and `Scripts/test-arm-guests.sh` for disk workflows and native Linux/QEMU startup/shutdown checks. The latter requires macOS, QEMU, and swtpm; its synthetic ISO tests configuration and EFI/backend startup, not OS installation. Full OS installation and interactive console checks require your own compatible installer media.
 
@@ -77,7 +79,7 @@ Native macOS storage and virtualization research application. **v0.5.0 adds mana
 Open `MacOnMac.xcodeproj` in Xcode on an Apple Silicon Mac with supported Xcode/macOS SDK. Run `Scripts/verify.sh`, or `Scripts/generate-xcodeproj.sh` if regenerating via XcodeGen.
 
 ## Provision
-In **Managed VM**, choose a **new destination folder that does not exist**, select a compatible Apple macOS `.ipsw` restore image, set CPU/RAM and 64+ GiB disk, and choose **Install macOS**. On successful installation choose **Start VM**. Incomplete VM folders from failed installation are intentionally retained.
+In **Virtual machines → Overview**, choose a **new destination folder that does not exist**, select a compatible Apple macOS `.ipsw` restore image, set CPU/RAM and 64+ GiB disk, and choose **Install macOS**. On successful installation choose **Start**. Incomplete VM folders from failed installation are intentionally retained.
 
 ## Safety
 Device/APFS inspection remains read-only. Privileged physical device access, generic passthrough and existing-installation boot remain disabled.

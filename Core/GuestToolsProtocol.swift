@@ -69,10 +69,22 @@ struct VBSHA256 {
     mutating func update(_ data: Data) {
         let bytes = Array(data)
         count &+= UInt64(bytes.count)
-        buffer.append(contentsOf: bytes)
-        while buffer.count >= 64 {
-            consume(buffer[0..<64]); buffer.removeFirst(64)
+        var offset = 0
+        if !buffer.isEmpty {
+            let taken = min(64 - buffer.count, bytes.count)
+            buffer.append(contentsOf: bytes.prefix(taken))
+            offset = taken
+            if buffer.count == 64 {
+                consume(buffer[0..<64])
+                buffer.removeAll(keepingCapacity: true)
+            }
         }
+        // Process blocks in place instead of repeatedly shifting a whole file chunk.
+        while bytes.count - offset >= 64 {
+            consume(bytes[offset..<(offset + 64)])
+            offset += 64
+        }
+        buffer.append(contentsOf: bytes[offset...])
     }
     mutating func finish() -> [UInt8] {
         let bits = count &* 8
@@ -153,6 +165,17 @@ enum VBPairing {
 }
 
 enum VBGuestAction: String, Codable { case ping, status }
+private enum VBGuestTimestamp {
+    static func isFresh(_ milliseconds: Int64, now: Date) -> Bool {
+        let nowMilliseconds = now.timeIntervalSince1970 * 1_000
+        guard nowMilliseconds.isFinite,
+              nowMilliseconds > Double(Int64.min) + 120_000,
+              nowMilliseconds < Double(Int64.max) - 120_000 else { return false }
+        let current = Int64(nowMilliseconds)
+        // Bound the untrusted timestamp before subtraction, avoiding Int64 overflow.
+        return milliseconds >= current - 120_000 && milliseconds <= current + 120_000
+    }
+}
 struct VBGuestRequest: Codable {
     let version: Int
     let id: UUID
@@ -167,7 +190,7 @@ struct VBGuestRequest: Codable {
     }
     func verify(key: Data, now: Date = Date()) throws {
         guard version == 2 else { throw VBToolsError.malformedRecord }
-        guard abs(Int64(now.timeIntervalSince1970 * 1000) - milliseconds) <= 120_000 else { throw VBToolsError.expired }
+        guard VBGuestTimestamp.isFresh(milliseconds, now: now) else { throw VBToolsError.expired }
         guard VBPairing.constantTimeEqual(authentication, try VBPairing.mac(key: key, data: canonical)) else { throw VBToolsError.unauthenticated }
     }
 }
@@ -185,7 +208,7 @@ struct VBGuestReply: Codable {
     }
     func verify(for request: VBGuestRequest, key: Data, now: Date = Date()) throws {
         guard version == 2, id == request.id, detail.utf8.count <= 4_096 else { throw VBToolsError.malformedRecord }
-        guard abs(Int64(now.timeIntervalSince1970 * 1000) - milliseconds) <= 120_000 else { throw VBToolsError.expired }
+        guard VBGuestTimestamp.isFresh(milliseconds, now: now) else { throw VBToolsError.expired }
         guard VBPairing.constantTimeEqual(authentication, try VBPairing.mac(key: key, data: canonical)) else { throw VBToolsError.unauthenticated }
     }
 }
@@ -211,17 +234,30 @@ enum VBGuestToolsTransport {
     static let chunkSize = 128 * 1024
     static let components = ["host-clipboard", "guest-clipboard", "requests", "replies"]
     static func prepare(root: URL) throws {
-        for name in components { try FileManager.default.createDirectory(at: root.appendingPathComponent(name), withIntermediateDirectories: true) }
+        guard isSafeDirectory(root) else { throw VBToolsError.malformedRecord }
+        for name in components {
+            let folder = root.appendingPathComponent(name, isDirectory: true)
+            if !FileManager.default.fileExists(atPath: folder.path) {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+            }
+            guard isSafeDirectory(folder) else { throw VBToolsError.malformedRecord }
+        }
     }
     static func storeRecord<T: Encodable>(_ record: T, root: URL, directory: String, id: UUID) throws {
         guard components.contains(directory) else { throw VBToolsError.malformedRecord }
         let folder = root.appendingPathComponent(directory)
-        guard FileManager.default.fileExists(atPath: folder.path) else { throw VBToolsError.malformedRecord }
-        try JSONEncoder().encode(record).write(to: folder.appendingPathComponent(id.uuidString + ".json"), options: .atomic)
+        guard Self.isSafeDirectory(root), Self.isSafeDirectory(folder) else { throw VBToolsError.malformedRecord }
+        try VBGuestFileIO.writeNewFile(JSONEncoder().encode(record), name: id.uuidString + ".json", root: root, component: directory)
+    }
+    private static func isSafeDirectory(_ url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+              values.isDirectory == true, values.isSymbolicLink != true else { return false }
+        return true
     }
     static func records<T: Decodable>(_ type: T.Type, root: URL, directory: String, maxBytes: Int = 70_000) -> [T] {
-        guard components.contains(directory),
-              let urls = try? FileManager.default.contentsOfDirectory(at: root.appendingPathComponent(directory), includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return [] }
+        let folder = root.appendingPathComponent(directory, isDirectory: true)
+        guard components.contains(directory), isSafeDirectory(root), isSafeDirectory(folder),
+              let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return [] }
         return urls.sorted { a, b in
             let x = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             let y = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -230,7 +266,7 @@ enum VBGuestToolsTransport {
             .prefix(200).compactMap { url -> T? in
                 guard let p = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]),
                     p.isRegularFile == true, p.isSymbolicLink != true, (p.fileSize ?? Int.max) <= maxBytes,
-                    let d = try? Data(contentsOf: url), d.count <= maxBytes else { return nil }
+                    let d = try? VBGuestFileIO.readBoundedFile(name: url.lastPathComponent, root: root, component: directory, limit: maxBytes), d.count <= maxBytes else { return nil }
                 return try? JSONDecoder().decode(T.self, from: d)
             }
     }
@@ -283,40 +319,37 @@ enum VBGuestToolsTransport {
               let size = properties.fileSize, size >= 0, UInt64(size) <= maxTransfer else { throw VBToolsError.unsafeFile }
         let folder = root.appendingPathComponent(origin + "-files", isDirectory: true)
         var folderFlag: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &folderFlag), folderFlag.boolValue else { throw VBToolsError.unsafeFile }
+        guard Self.isSafeDirectory(folder), FileManager.default.fileExists(atPath: folder.path, isDirectory: &folderFlag), folderFlag.boolValue else { throw VBToolsError.unsafeFile }
         let id = UUID()
         let ext = source.pathExtension.lowercased()
         let suffix = ext.range(of: "^[a-z0-9]{1,12}$", options: .regularExpression) == nil ? "" : "." + ext
         let name = id.uuidString + suffix
-        let destination = folder.appendingPathComponent(name)
-        let partial = folder.appendingPathComponent(id.uuidString + ".partial")
         let reader = try FileHandle(forReadingFrom: source)
         defer { try? reader.close() }
-        guard FileManager.default.createFile(atPath: partial.path, contents: nil, attributes: [.posixPermissions: 0o600]) else { throw VBToolsError.unsafeFile }
-        defer { try? FileManager.default.removeItem(at: partial) }
-        let writer = try FileHandle(forWritingTo: partial)
-        defer { try? writer.close() }
         var digest = VBSHA256()
+        var contents = Data()
         var written: UInt64 = 0
         while written < UInt64(size) {
             let chunk = reader.readData(ofLength: min(chunkSize, Int(UInt64(size) - written)))
             guard !chunk.isEmpty else { throw VBToolsError.unsafeFile }
-            try writer.write(contentsOf: chunk)
+            contents.append(chunk)
             digest.update(chunk)
             written += UInt64(chunk.count)
             progress(Double(written) / Double(max(1, size)))
         }
         // Reject a growing source too: never publish an incomplete snapshot as success.
         guard reader.readData(ofLength: 1).isEmpty else { throw VBToolsError.unsafeFile }
-        try writer.synchronize()
-        try writer.close()
-        try FileManager.default.moveItem(at: partial, to: destination)
+        try VBGuestFileIO.writeNewFile(contents, name: name, root: root, component: origin + "-files")
         let receipt = VBTransferReceipt(id: id, createdAt: Date(), filename: name,
                                         originalName: source.lastPathComponent, bytes: written,
                                         sha256: VBSHA256.hex(digest.finish()))
         let receiptURL = folder.appendingPathComponent(id.uuidString + ".transfer.json")
-        do { try JSONEncoder().encode(receipt).write(to: receiptURL, options: .atomic) }
-        catch { try? FileManager.default.removeItem(at: destination); throw error }
+        do {
+            try VBGuestFileIO.writeNewFile(JSONEncoder().encode(receipt), name: receiptURL.lastPathComponent, root: root, component: origin + "-files")
+        } catch {
+            try? VBGuestFileIO.removeFile(name: name, root: root, component: origin + "-files")
+            throw error
+        }
         progress(1)
         return receipt
     }

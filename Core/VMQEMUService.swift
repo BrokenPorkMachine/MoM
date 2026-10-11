@@ -26,7 +26,7 @@ enum VMQEMUPlan {
         var args = ["-name", name,
                     "-uuid", record.id.uuidString, "-machine", "\(settings.machine),gic-version=3,highmem=on,highmem-mmio=off,highmem-ecam=off,highmem-redists=off,acpi=on,pflash0=fwcode,pflash1=fwvars",
                     "-accel", accelerator, "-cpu", accelerator == "hvf" ? "host" : "max",
-                    "-smp", String(hardware.cpuCount), "-m", "\(hardware.memoryGiB * 1024)",
+                    "-smp", "cpus=\(hardware.cpuCount),sockets=1,cores=\(hardware.cpuCount),threads=1", "-m", "\(hardware.memoryGiB * 1024)",
                     "-nodefaults", "-no-user-config", "-monitor", "none", "-serial", "none", "-qmp", "stdio",
                     "-display", display, "-device", "ramfb", "-device", "qemu-xhci,id=usb",
                     "-device", "usb-kbd,bus=usb.0", "-device", "usb-tablet,bus=usb.0"]
@@ -79,6 +79,12 @@ final class VMQEMUService {
     private var sessionID: UUID?
     var onExit: ((String) -> Void)?
     var isRunning: Bool { process != nil }
+    var processIdentifier: Int32? { process?.isRunning == true ? process?.processIdentifier : nil }
+
+    func requestShutdown() throws {
+        guard ready, process?.isRunning == true else { throw VMGuestError.invalidState }
+        try command("system_powerdown")
+    }
 
     func start(folder: URL, record: ManagedVMManifest, hardware: VMHardwareSettings,
                connectivity: VMConnectivitySettings, leases: [VMDiskImageLease],
@@ -203,8 +209,9 @@ final class VMQEMUService {
     }
 
     private func command(_ name: String, id: Int = 2) throws {
+        guard let writer = input?.fileHandleForWriting else { throw VMGuestError.invalidState }
         let bytes = try JSONSerialization.data(withJSONObject: ["execute": name, "id": id]) + Data([10])
-        try input?.fileHandleForWriting.write(contentsOf: bytes)
+        try writer.write(contentsOf: bytes)
     }
 
     private func cleanup() {
@@ -230,7 +237,15 @@ final class VMQEMUService {
     }
 
     private func failure(_ message: String, folder: URL, filename: String) -> NSError {
-        let tail = (try? String(contentsOf: folder.appendingPathComponent(filename), encoding: .utf8))?.suffix(2000) ?? ""
+        // Read only the tail: logs can grow throughout a long-running guest session.
+        var tail = ""
+        if let handle = try? FileHandle(forReadingFrom: folder.appendingPathComponent(filename)) {
+            defer { try? handle.close() }
+            if let end = try? handle.seekToEnd() {
+                try? handle.seek(toOffset: end > 4096 ? end - 4096 : 0)
+                if let bytes = try? handle.read(upToCount: 4096) { tail = String(decoding: bytes, as: UTF8.self) }
+            }
+        }
         return NSError(domain: "VolumeBoot.QEMU", code: 1, userInfo: [NSLocalizedDescriptionKey: "\(message). \(tail)"])
     }
 }

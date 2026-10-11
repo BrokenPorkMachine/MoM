@@ -22,8 +22,24 @@ struct GuestToolsProtocolTests {
             try FileManager.default.createDirectory(at: exchange.appendingPathComponent(name), withIntermediateDirectories: true)
         }
         try VBGuestToolsTransport.prepare(root: exchange)
+        let requestsPath = exchange.appendingPathComponent("requests")
+        try FileManager.default.removeItem(at: requestsPath)
+        try FileManager.default.createSymbolicLink(at: requestsPath, withDestinationURL: root)
+        reject({ try VBGuestToolsTransport.storeRecord(["sentinel": "x"], root: exchange, directory: "requests", id: UUID()) }, "reject symlinked guest tools directory")
+        try FileManager.default.removeItem(at: requestsPath)
+        try FileManager.default.createDirectory(at: requestsPath, withIntermediateDirectories: false)
         let abc = VBSHA256.hex(VBSHA256.digest(Data("abc".utf8)))
         try check(abc == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "sha256 test vector")
+        let million = Data(repeating: 0x61, count: 1_000_000)
+        try check(VBSHA256.hex(VBSHA256.digest(million)) == "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0", "SHA-256 million-byte reference vector")
+        let boundaryData = Data((0..<1025).map { UInt8(truncatingIfNeeded: $0) })
+        for stride in [1, 7, 55, 63, 64, 65, 128, 511] {
+            var digest = VBSHA256()
+            for offset in Swift.stride(from: 0, to: boundaryData.count, by: stride) {
+                digest.update(boundaryData.subdata(in: offset..<min(offset + stride, boundaryData.count)))
+            }
+            try check(digest.finish() == VBSHA256.digest(boundaryData), "streaming SHA matches across block boundaries")
+        }
         let key = Data(0..<32)
         try check(try VBPairing.mac(key: key, data: Data("auth test".utf8)) == "1913d6bc3f6939f49386c3e14de795cfa55e0d2aa512cae8d451c7df5f397043", "hmac test vector")
         try check(VBPairing.constantTimeEqual("abc", "abc"), "equal MAC")
@@ -41,11 +57,15 @@ struct GuestToolsProtocolTests {
         count += 1
         reject({ try request.verify(key: Data(repeating: 9, count: 32)) }, "tampered request key")
         reject({ try request.verify(key: key, now: Date().addingTimeInterval(200)) }, "expired")
+        let overflowRequest = VBGuestRequest(version: 2, id: UUID(), milliseconds: Int64.max, action: .ping, authentication: "")
+        reject({ try overflowRequest.verify(key: key) }, "extreme request timestamp")
         let reply = try VBGuestReply.create(for: request, detail: "pong", key: key)
         try reply.verify(for: request, key: key)
         count += 1
         reject({ try reply.verify(for: request, key: Data(repeating: 1, count: 32)) }, "wrong reply key")
         reject({ try reply.verify(for: try VBGuestRequest.create(.status, key: key), key: key) }, "wrong request ID")
+        let overflowReply = VBGuestReply(version: 2, id: request.id, milliseconds: Int64.min, detail: "pong", authentication: "")
+        reject({ try overflowReply.verify(for: request, key: key) }, "extreme reply timestamp")
         try VBGuestToolsTransport.offerClipboard("guest clipboard", origin: "guest", root: exchange)
         try check(VBGuestToolsTransport.latestClipboard(for: "host", root: exchange)?.text == "guest clipboard", "clipboard host incoming")
         try VBGuestToolsTransport.offerClipboard("host clipboard", origin: "host", root: exchange)

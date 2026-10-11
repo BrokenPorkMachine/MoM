@@ -36,3 +36,15 @@ See `NETWORKING.md` and `GUEST_HOST_TOOLS.md`. NAT is the default; optional brid
 | Guest installation | Per-user launchd user-agent install/uninstall script | macOS launchctl runtime |
 
 Existing physical macOS installations are not bootable using this release.
+
+## Managed guests and workspace audit
+
+| Subsystem | Current implementation | Validation limits |
+|---|---|---|
+| Managed guests | macOS IPSW; native ARM Linux EFI; Windows ARM QEMU/HVF with persistent UEFI/TPM | Synthetic EFI and live QEMU/TPM lifecycle checks pass; full guest installations need real media |
+| Disk images | Sparse raw creation, boot selection, secondary attachment/access, growth, detach, confirmed deletion, session locks | Guest partition/filesystem growth remains a guest operation |
+| Console input | Native capture/release, configurable host release shortcut, focus-loss release; external Windows console controls | Interactive input validation remains manual |
+| Workspace | Guided creation, library/recents, separate console and settings, dirty-state protection, readiness, graceful/forced shutdown | Light/dark/compact render checks; VoiceOver and real guest interaction remain manual |
+| Optimization | Linear block ingestion for SHA-256, throttled progress, bounded QEMU log reads, lazy inventory | Reference SHA vectors and incremental boundary tests pass |
+
+The app source compiles on this Apple Silicon host using the installed macOS 26 SDK. Full Xcode bundle/signing checks and privileged daemon deployment are separate release gates. See [audit scope and validation](AUDIT_AND_POLISH.md).

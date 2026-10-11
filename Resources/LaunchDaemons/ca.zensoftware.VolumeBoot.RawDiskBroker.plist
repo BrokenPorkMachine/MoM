@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>ca.zensoftware.VolumeBoot.RawDiskBroker</string>
-  <key>BundleProgram</key><string>Contents/MacOS/VolumeBootRawDiskDaemon</string>
-  <key>MachServices</key><dict><key>ca.zensoftware.VolumeBoot.RawDiskBroker</key><true/></dict>
-  <key>AssociatedBundleIdentifiers</key><array><string>ca.zensoftware.VolumeBoot</string></array>
-</dict></plist>

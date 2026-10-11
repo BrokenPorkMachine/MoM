@@ -15,9 +15,9 @@ import Foundation
 enum DaemonBrokerContract {
     static let protocolVersion = 3
     static let releaseVersion = "0.14.0"
-    static let machService = "ca.zensoftware.VolumeBoot.RawDiskBroker"
+    static let machService = "ca.zensoftware.MacOnMac.RawDiskBroker"
     static let daemonPlist = machService + ".plist"
-    static let mainAppBundleID = "ca.zensoftware.VolumeBoot"
+    static let mainAppBundleID = "ca.zensoftware.MacOnMac"
     static let daemonExecutable = "VolumeBootRawDiskDaemon"
     static let maxPayloadBytes = 4_096
 

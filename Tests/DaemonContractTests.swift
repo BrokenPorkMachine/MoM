@@ -19,6 +19,10 @@ import Foundation
         check(!BrokerSigningRequirements.validTeamID("AA\"BBBBBBB"), "injection")
         check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: DaemonBrokerContract.mainAppBundleID) != nil, "app signing req")
         check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: DaemonBrokerContract.machService) != nil, "daemon signing req")
+        check(DaemonBrokerContract.mainAppBundleID == "ca.zensoftware.MacOnMac", "renamed app signing identity")
+        check(DaemonBrokerContract.machService == "ca.zensoftware.MacOnMac.RawDiskBroker", "renamed daemon signing identity")
+        check(DaemonBrokerContract.daemonPlist == "ca.zensoftware.MacOnMac.RawDiskBroker.plist", "launchd plist identity")
+        check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: "ca.zensoftware.VolumeBoot") == nil, "reject obsolete app identity")
         check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: "attacker.bundle") == nil, "reject foreign identifier")
         let unsafe = DaemonBrokerContract.Health(protocolVersion: 3, release: "0.14.0", signedPeerRequired: true,
             daemonHasRootPrivileges: true, rawDiskGrantsEnabled: true, availableOperations: ["openWritable"])

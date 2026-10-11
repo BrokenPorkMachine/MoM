@@ -30,7 +30,8 @@ enum VMGuestMedia {
         guard url.isFileURL, url.pathExtension.lowercased() == "iso",
               resolved.path != "/dev", !resolved.path.hasPrefix("/dev/"),
               let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-              values.isRegularFile == true, (values.fileSize ?? 0) > 0 else { throw VMGuestError.invalidISO }
+              values.isRegularFile == true, let size = values.fileSize, size >= 512,
+              size % 512 == 0 else { throw VMGuestError.invalidISO }
     }
 }
 

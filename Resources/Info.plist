@@ -5,7 +5,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>VolumeBoot</string>
 	<key>CFBundleIdentifier</key>
-	<string>ca.zensoftware.VolumeBoot</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>VolumeBoot</string>
 	<key>CFBundleShortVersionString</key>
@@ -17,6 +17,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>VolumeBoot can provide the host microphone to a macOS virtual machine when microphone input is enabled for that VM.</string>
+	<string>MacOnMac` can provide the host microphone to a macOS virtual machine when microphone input is enabled for that VM.</string>
 </dict>
 </plist>

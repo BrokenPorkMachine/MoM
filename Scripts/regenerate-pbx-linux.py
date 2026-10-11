@@ -1,10 +1,10 @@
 from pathlib import Path
 import hashlib, plistlib
 root=Path(__file__).resolve().parents[1]
-out=root/'VolumeBoot.xcodeproj/project.pbxproj'
+out=root/'MacOnMac.xcodeproj/project.pbxproj'
 def ID(s):return hashlib.sha1(s.encode()).hexdigest()[:24].upper()
 def q(s):return '"'+s.replace('\\','\\\\').replace('"','\\"').replace('\n','\\n')+'"'
-def items(a):return '( '+', '.join(a)+', )'
+def items(a):return '( '+', '.join(a)+', )' if a else '()'
 obj={}
 def add(k,body):
  key=ID(k)
@@ -17,9 +17,9 @@ for subdir in ['App','Core','Helpers/VolumeBootDiskBroker','Privileged/VolumeBoo
  for f in sorted((root/subdir).glob('*.swift')):
   path=f.relative_to(root).as_posix()
   refs[path]=add('ref:'+path,f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {q(f.name)}; sourceTree = "<group>";')
-appProduct=add('product-app','isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VolumeBoot.app; sourceTree = BUILT_PRODUCTS_DIR;')
-svcProduct=add('product-xpc','isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = VolumeBootDiskBroker.xpc; sourceTree = BUILT_PRODUCTS_DIR;')
-dmnProduct=add('product-daemon','isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = VolumeBootRawDiskDaemon; sourceTree = BUILT_PRODUCTS_DIR;')
+appProduct=add('product-app','isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacOnMac.app; sourceTree = BUILT_PRODUCTS_DIR;')
+svcProduct=add('product-xpc','isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = MacOnMacDiskBroker.xpc; sourceTree = BUILT_PRODUCTS_DIR;')
+dmnProduct=add('product-daemon','isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MacOnMacRawDiskDaemon; sourceTree = BUILT_PRODUCTS_DIR;')
 source_refs={}
 def buildRef(target,path):
  key=target+':'+path
@@ -39,7 +39,7 @@ products=add('grp-prod','isa = PBXGroup; children = '+items([appProduct,svcProdu
 rootGroup=add('grp-root','isa = PBXGroup; children = '+items([folders['App'],folders['Core'],folders['Helpers'],folders['Privileged'],resources,products])+'; sourceTree = "<group>";')
 # fix nested group paths; Helpers and Privileged group path should be relative to root accurate
 phases={}
-for target,paths in [('VolumeBoot',app_sources),('VolumeBootDiskBroker',xpc_sources),('VolumeBootRawDiskDaemon',daemon_sources)]:
+for target,paths in [('MacOnMac',app_sources),('MacOnMacDiskBroker',xpc_sources),('MacOnMacRawDiskDaemon',daemon_sources)]:
  bf=[buildRef(target,p) for p in paths]
  phases[target]=add('phase:'+target,'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = '+items(bf)+'; runOnlyForDeploymentPostprocessing = 0;')
 frameworks={}
@@ -51,23 +51,23 @@ embed=add('embed-phase',f'isa = PBXCopyFilesBuildPhase; buildActionMask = 214748
 shell='''set -euo pipefail
 OUT="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}"
 mkdir -p "${OUT}/MacOS" "${OUT}/Library/LaunchDaemons"
-cp "${BUILT_PRODUCTS_DIR}/VolumeBootRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
-cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist"
+cp "${BUILT_PRODUCTS_DIR}/MacOnMacRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
+cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist"
 '''
 post=add('script-daemon','isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Bundle launchd daemon"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/bash; shellScript = '+q(shell)+';')
 # dep
-appT=ID('target-VolumeBoot');svcT=ID('target-VolumeBootDiskBroker');dmnT=ID('target-VolumeBootRawDiskDaemon')
-proxy1=add('proxy-xpc',f'isa = PBXContainerItemProxy; containerPortal = {ID("project")}; proxyType = 1; remoteGlobalIDString = {svcT}; remoteInfo = VolumeBootDiskBroker;')
-proxy2=add('proxy-daemon',f'isa = PBXContainerItemProxy; containerPortal = {ID("project")}; proxyType = 1; remoteGlobalIDString = {dmnT}; remoteInfo = VolumeBootRawDiskDaemon;')
+appT=ID('target-MacOnMac');svcT=ID('target-MacOnMacDiskBroker');dmnT=ID('target-MacOnMacRawDiskDaemon')
+proxy1=add('proxy-xpc',f'isa = PBXContainerItemProxy; containerPortal = {ID("project")}; proxyType = 1; remoteGlobalIDString = {svcT}; remoteInfo = MacOnMacDiskBroker;')
+proxy2=add('proxy-daemon',f'isa = PBXContainerItemProxy; containerPortal = {ID("project")}; proxyType = 1; remoteGlobalIDString = {dmnT}; remoteInfo = MacOnMacRawDiskDaemon;')
 dep1=add('dependency-xpc',f'isa = PBXTargetDependency; target = {svcT}; targetProxy = {proxy1};')
 dep2=add('dependency-daemon',f'isa = PBXTargetDependency; target = {dmnT}; targetProxy = {proxy2};')
 # config helper
 
 def conf(name,kind,debug):
  settings=['SWIFT_VERSION = 5.0','MACOSX_DEPLOYMENT_TARGET = 15.0','SDKROOT = macosx','CLANG_ENABLE_MODULES = YES','SWIFT_STRICT_CONCURRENCY = minimal','CODE_SIGN_STYLE = Automatic','ENABLE_HARDENED_RUNTIME = YES']
- if kind=='VolumeBoot': settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.VolumeBoot','PRODUCT_NAME = VolumeBoot','INFOPLIST_FILE = Resources/Info.plist','GENERATE_INFOPLIST_FILE = NO','CODE_SIGN_ENTITLEMENTS = Resources/VolumeBoot.entitlements']
- elif kind=='VolumeBootDiskBroker': settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.VolumeBoot.DiskBroker','PRODUCT_NAME = VolumeBootDiskBroker','INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist','GENERATE_INFOPLIST_FILE = NO','CODE_SIGN_ENTITLEMENTS = ""']
- else: settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.VolumeBoot.RawDiskBroker','PRODUCT_NAME = VolumeBootRawDiskDaemon','GENERATE_INFOPLIST_FILE = YES','CODE_SIGN_ENTITLEMENTS = ""']
+ if kind=='MacOnMac': settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac','PRODUCT_NAME = MacOnMac','INFOPLIST_FILE = Resources/Info.plist','GENERATE_INFOPLIST_FILE = NO','CODE_SIGN_ENTITLEMENTS = Resources/MacOnMac.entitlements']
+ elif kind=='MacOnMacDiskBroker': settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.DiskBroker','PRODUCT_NAME = MacOnMacDiskBroker','INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist','GENERATE_INFOPLIST_FILE = NO','CODE_SIGN_ENTITLEMENTS = ""']
+ else: settings += ['PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.RawDiskBroker','PRODUCT_NAME = MacOnMacRawDiskDaemon','GENERATE_INFOPLIST_FILE = YES','CODE_SIGN_ENTITLEMENTS = ""']
  if debug: settings += ['SWIFT_OPTIMIZATION_LEVEL = "-Onone"','DEBUG_INFORMATION_FORMAT = dwarf']
  else:settings+=['SWIFT_OPTIMIZATION_LEVEL = "-O"','SWIFT_COMPILATION_MODE = wholemodule']
  return add(f'conf-{kind}-{name}','isa = XCBuildConfiguration; buildSettings = { '+ '; '.join(settings)+'; }; name = '+name+';')
@@ -75,11 +75,11 @@ def conf(name,kind,debug):
 def configlist(kind):
  a=conf('Debug',kind,True);b=conf('Release',kind,False)
  return add('cflist-'+kind,f'isa = XCConfigurationList; buildConfigurations = ( {a}, {b}, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
-for target in ['VolumeBoot','VolumeBootDiskBroker','VolumeBootRawDiskDaemon']:
+for target in ['MacOnMac','MacOnMacDiskBroker','MacOnMacRawDiskDaemon']:
  confref=configlist(target)
- if target=='VolumeBoot':
+ if target=='MacOnMac':
   phaseslist=[phases[target],frameworks[target],embed,post];prod=appProduct;ptype='com.apple.product-type.application';deps=[dep1,dep2]
- elif target=='VolumeBootDiskBroker':
+ elif target=='MacOnMacDiskBroker':
   phaseslist=[phases[target],frameworks[target]];prod=svcProduct;ptype='com.apple.product-type.xpc-service';deps=[]
  else:
   phaseslist=[phases[target],frameworks[target]];prod=dmnProduct;ptype='com.apple.product-type.tool';deps=[]

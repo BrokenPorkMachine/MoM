@@ -1,4 +1,4 @@
-name: VolumeBoot
+name: MacOnMac
 options:
   bundleIdPrefix: ca.zensoftware
   deploymentTarget:
@@ -7,49 +7,50 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
-    CODE_SIGN_ENTITLEMENTS: Resources/VolumeBoot.entitlements
+    CODE_SIGN_ENTITLEMENTS: Resources/MacOnMac.entitlements
     ENABLE_HARDENED_RUNTIME: YES
     DEVELOPMENT_TEAM: ""
 targets:
-  VolumeBoot:
+  MacOnMac:
     type: application
     platform: macOS
     sources:
       - path: App
       - path: Core
-    info:
-      path: Resources/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot
-        PRODUCT_NAME: VolumeBoot
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac
+        PRODUCT_NAME: MacOnMac
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
     postBuildScripts:
       - name: Bundle signed launchd daemon
         script: |
           set -euo pipefail
           OUT="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}"
           mkdir -p "${OUT}/MacOS" "${OUT}/Library/LaunchDaemons"
-          cp "${BUILT_PRODUCTS_DIR}/VolumeBootRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
-          cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist"
+          cp "${BUILT_PRODUCTS_DIR}/MacOnMacRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
+          cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist"
     dependencies:
-      - target: VolumeBootDiskBroker
+      - target: MacOnMacDiskBroker
         embed: true
-      - target: VolumeBootRawDiskDaemon
-  VolumeBootDiskBroker:
+      - target: MacOnMacRawDiskDaemon
+  MacOnMacDiskBroker:
     type: xpc-service
     platform: macOS
     sources:
       - path: Helpers/VolumeBootDiskBroker/main.swift
       - path: Core/BrokerAuthorizationPolicy.swift
       - path: Core/BrokerProtocolContract.swift
-    info:
-      path: Helpers/VolumeBootDiskBroker/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot.DiskBroker
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac.DiskBroker
+        PRODUCT_NAME: MacOnMacDiskBroker
+        INFOPLIST_FILE: Helpers/VolumeBootDiskBroker/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: ""
 
-  VolumeBootRawDiskDaemon:
+  MacOnMacRawDiskDaemon:
     type: tool
     platform: macOS
     sources:
@@ -62,7 +63,7 @@ targets:
       - path: Privileged/VolumeBootRawDiskDaemon/TrustedDiskProbe.swift
     settings:
       base:
-        PRODUCT_NAME: VolumeBootRawDiskDaemon
-        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.VolumeBoot.RawDiskBroker
+        PRODUCT_NAME: MacOnMacRawDiskDaemon
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac.RawDiskBroker
         CODE_SIGN_ENTITLEMENTS: ""
         ENABLE_HARDENED_RUNTIME: YES

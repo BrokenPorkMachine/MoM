@@ -43,7 +43,12 @@ struct ManagedVMManifest: Codable, Identifiable {
 
 enum VMRegistry {
     static func read(at folder: URL) throws -> ManagedVMManifest {
-        try JSONDecoder().decode(ManagedVMManifest.self, from: Data(contentsOf: folder.appendingPathComponent("manifest.json")))
+        let record = try JSONDecoder().decode(ManagedVMManifest.self, from: Data(contentsOf: folder.appendingPathComponent("manifest.json")))
+        guard (1...3).contains(record.version), (64...2048).contains(record.diskSizeGiB) else {
+            throw NSError(domain: "VolumeBoot.Registry", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                "This VM manifest has an unsupported version or boot disk capacity. Keep its files and open it with a compatible release."])
+        }
+        return record
     }
     static func write(_ manifest: ManagedVMManifest, at folder: URL) throws {
         let encoder = JSONEncoder()

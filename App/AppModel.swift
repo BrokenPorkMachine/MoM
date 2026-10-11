@@ -3,6 +3,12 @@ import Combine
 import AppKit
 import Virtualization
 
+protocol VMPreferences {
+    func stringArray(forKey key: String) -> [String]?
+    func set(_ value: Any?, forKey key: String)
+}
+extension UserDefaults: VMPreferences {}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var devices: [StorageDevice] = []
@@ -28,6 +34,17 @@ final class AppModel: ObservableObject {
     @Published private(set) var vmRevision = 0
     @Published private(set) var vmStatus = "No VM loaded"
     @Published private(set) var vmOperationInProgress = false
+    @Published private(set) var selectedManifest: ManagedVMManifest?
+    @Published private(set) var vmFailure: String?
+    @Published private(set) var shutdownRequested = false
+    @Published private(set) var validationIssues: [String] = []
+    @Published private(set) var validationSummary: String?
+    @Published private(set) var workspaceRevision = 0
+    private var loadedFolderPath: String?
+    private var savedHardware: VMHardwareSettings?
+    private var savedConnectivity: VMConnectivitySettings?
+    private let preferences: (any VMPreferences)?
+    private var recentPaths: [String] = []
     @Published private(set) var diskImageStatus = "Choose a VM folder to manage its disk images"
     @Published private(set) var diskRevision = 0
     @Published var hardware = VMHardwareSettings.default
@@ -62,15 +79,106 @@ final class AppModel: ObservableObject {
     @Published private(set) var networkHealth = "Select a VM and check its profile"
     @Published private(set) var clipboardStatus = "Manual text clipboard only; no automatic sync"
 
-    init() {
+    init(preferences: (any VMPreferences)? = nil) {
+        self.preferences = preferences
+        recentPaths = (preferences?.stringArray(forKey: "recentVMPaths") ?? []).filter { $0.hasPrefix("/") }
+            .map { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath().path }
         vm.onExternalStateChange = { [weak self] status in
-            self?.vmStatus = status
-            self?.vmRevision += 1
+            guard let self else { return }
+            self.activeDiskGrant?.releaseAfterVMStops()
+            self.activeDiskGrant = nil
+            self.shutdownRequested = false
+            self.vmStatus = status
+            self.vmRevision += 1
+        }
+        refreshManagedVMs()
+        if preferences != nil, let path = recentPaths.first,
+           (try? VMRegistry.read(at: URL(fileURLWithPath: path))) != nil {
+            loadHardwareProfile(for: URL(fileURLWithPath: path))
         }
     }
 
-    private func loadGuestDetails(from folder: URL) {
-        guard let record = try? VMRegistry.read(at: folder) else { return }
+    var currentManifest: ManagedVMManifest? { loadedFolderPath == vmFolderPath ? selectedManifest : nil }
+    var hasUnsavedHardware: Bool { currentManifest != nil && savedHardware != nil && hardware != savedHardware }
+    var hasUnsavedConnectivity: Bool { currentManifest != nil && savedConnectivity != nil && connectivity != savedConnectivity }
+    var hasUnsavedMedia: Bool {
+        guard let record = currentManifest, record.guestOS != .macOS else { return false }
+        return installationISOPath != (record.installationMediaPath ?? "") ||
+            windowsDriverISOPath != (record.driverMediaPath ?? "") ||
+            qemuExecutablePath != (record.qemu?.executablePath ?? "") ||
+            swtpmExecutablePath != (record.qemu?.swtpmPath ?? "")
+    }
+    var hasDraftConfiguration: Bool {
+        currentManifest == nil && (!vmFolderPath.isEmpty || guestOS != .macOS || hardware != .default ||
+            connectivity != .default || diskSizeGiB != 80 || !restoreImagePath.isEmpty || !installationISOPath.isEmpty ||
+            !windowsDriverISOPath.isEmpty || !qemuExecutablePath.isEmpty || !swtpmExecutablePath.isEmpty ||
+            !windowsFirmwareCodePath.isEmpty || !windowsFirmwareVariablesPath.isEmpty)
+    }
+    var hasUnsavedChanges: Bool { hasUnsavedHardware || hasUnsavedConnectivity || hasUnsavedMedia || hasDraftConfiguration }
+    var canSelectVM: Bool { !isVMInUse && !transferInProgress }
+    var canStartVM: Bool {
+        guard !isVMInUse, !hasUnsavedChanges, let record = currentManifest else { return false }
+        return record.state == .installed || (record.guestOS != .macOS && record.state == .installing)
+    }
+    var canFinishInstallation: Bool { !isVMInUse && currentManifest?.state == .installing && guestOS != .macOS }
+    var maximumCPUCount: Int { max(2, min(ProcessInfo.processInfo.processorCount, VZVirtualMachineConfiguration.maximumAllowedCPUCount)) }
+    var canCreateVM: Bool {
+        let media = guestOS == .macOS ? restoreImagePath : installationISOPath
+        return !isVMInUse && currentManifest == nil && vmFolderPath.hasPrefix("/") && media.hasPrefix("/") &&
+            !FileManager.default.fileExists(atPath: vmFolderPath)
+    }
+
+    func validateVMConfiguration() {
+        guard let record = currentManifest else { return }
+        if hasUnsavedChanges {
+            validationIssues = ["Save or reload your edits before validating the saved configuration."]
+        } else {
+            refreshNetworkInterfaces()
+            validationIssues = VMReadiness.issues(folder: URL(fileURLWithPath: vmFolderPath), record: record,
+                hardware: hardware, connectivity: connectivity, interfaces: Set(networkInterfaces),
+                cpuRange: 2...maximumCPUCount, maximumMemoryGiB: safeMaximumMemoryGiB)
+        }
+        validationSummary = validationIssues.isEmpty ? "File and policy checks passed. The backend validates the full configuration at startup." : validationIssues.joined(separator: "\n")
+    }
+
+    func beginNewVM() {
+        guard canSelectVM else { return }
+        vmFolderPath = ""; selectedManifest = nil; loadedFolderPath = nil
+        savedHardware = nil; savedConnectivity = nil; hardwareLoaded = false
+        hardware = .default; connectivity = .default; guestOS = .macOS
+        restoreImagePath = ""; installationISOPath = ""; windowsDriverISOPath = ""
+        qemuExecutablePath = ""; swtpmExecutablePath = ""
+        windowsFirmwareCodePath = ""; windowsFirmwareVariablesPath = ""
+        attachDisposableDisk = false; vmFailure = nil; vmStatus = "Configure a new virtual machine"
+        validationIssues = []; validationSummary = nil
+        outgoingMessage = ""; guestMessages = []; guestHeartbeat = nil; pairingCode = ""
+        hardwareStatus = "New VM hardware applies during installation"
+        connectivityStatus = "NAT by default. Settings apply during installation."
+        diskImageStatus = "Choose a workspace destination before attaching disk images"
+        exchangeStatus = "Guest tools disabled"; authenticatedStatus = "Guest not paired"
+        networkHealth = "Select a VM and check its profile"; transferProgress = 0
+        clipboardStatus = "Manual text clipboard only; no automatic sync"
+        diskSizeGiB = 80; diskRevision += 1
+        workspaceRevision += 1
+    }
+
+    func selectNewGuest(_ guest: VMGuestOS) {
+        guard !isVMInUse, currentManifest == nil else { return }
+        guestOS = guest
+        if guest != .macOS {
+            hardware.keyboard = .usb; hardware.pointer = .mouse; connectivity.guestToolsEnabled = false
+        }
+        if guest == .windowsARM {
+            attachDisposableDisk = false; hardware.microphoneEnabled = false
+            connectivity.sharedFolderPath = nil
+            if connectivity.networkMode == .bridged { connectivity.networkMode = .nat }
+        }
+    }
+
+    private func loadGuestDetails(from folder: URL, record suppliedRecord: ManagedVMManifest? = nil) {
+        guard let record = suppliedRecord ?? (try? VMRegistry.read(at: folder)) else { return }
+        selectedManifest = record
+        loadedFolderPath = folder.path
         guestOS = record.guestOS
         if guestOS == .windowsARM { attachDisposableDisk = false }
         installationISOPath = record.installationMediaPath ?? ""
@@ -84,18 +192,8 @@ final class AppModel: ObservableObject {
     }
 
     func loadConnectivity() {
-        guard !isVMInUse else { connectivityStatus = "Stop the VM before selecting another profile"; return }
         guard vmFolderPath.hasPrefix("/") else { connectivityStatus = "Choose a VM folder"; return }
-        do {
-            hardware = try VMHardwareStore.load(from: URL(fileURLWithPath: vmFolderPath))
-            hardwareLoaded = true
-            hardwareStatus = "Hardware profile loaded"
-            loadGuestDetails(from: URL(fileURLWithPath: vmFolderPath))
-            connectivity = try VMConnectivityStore.load(from: URL(fileURLWithPath: vmFolderPath))
-            refreshNetworkInterfaces()
-            connectivityStatus = "Loaded VM connectivity profile"
-            refreshExchange()
-        } catch { connectivityStatus = "Load failed: \(error.localizedDescription)" }
+        loadHardwareProfile(for: URL(fileURLWithPath: vmFolderPath))
     }
 
     func saveHardware() {
@@ -104,30 +202,52 @@ final class AppModel: ObservableObject {
         let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
             try VMHardwarePolicy.verify(hardware, vmFolder: folder,
-                cpuRange: 2...max(2, ProcessInfo.processInfo.processorCount),
+                cpuRange: 2...maximumCPUCount,
                 maximumMemoryGiB: safeMaximumMemoryGiB)
             try VMHardwareStore.save(hardware, to: folder)
+            savedHardware = hardware
             hardwareStatus = "Saved · changes apply the next time this VM starts"
         } catch { hardwareStatus = "Save rejected: \(error.localizedDescription)" }
     }
 
     var safeMaximumMemoryGiB: Int {
-        max(4, min(64, Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) - 4))
+        max(4, min(Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824),
+                   Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) - 4))
     }
 
     func loadHardwareProfile(for folder: URL) {
-        guard !isVMInUse else { hardwareStatus = "Stop the VM before selecting another instance"; return }
-        vmFolderPath = folder.path
+        let folder = folder.standardizedFileURL.resolvingSymlinksInPath()
+        guard canSelectVM else { hardwareStatus = "Stop the VM and finish transfers before selecting another instance"; return }
         do {
-            hardware = try VMHardwareStore.load(from: folder)
+            // Load everything before publishing any selection: failures preserve the previous VM.
+            let record = try VMRegistry.read(at: folder)
+            let nextHardware = try VMHardwareStore.load(from: folder)
+            let nextConnectivity = try VMConnectivityStore.load(from: folder)
+            vmFolderPath = folder.path
+            hardware = nextHardware; savedHardware = nextHardware
+            connectivity = nextConnectivity; savedConnectivity = nextConnectivity
+            selectedManifest = record; loadedFolderPath = folder.path
             hardwareLoaded = true
             hardwareStatus = "Hardware profile loaded for \(folder.lastPathComponent)"
-            loadGuestDetails(from: folder)
-            connectivity = try VMConnectivityStore.load(from: folder)
+            loadGuestDetails(from: folder, record: record)
             connectivityStatus = "Loaded VM connectivity profile"
+            vmFailure = nil; vmStatus = "\(record.guestOS.title) selected · \(record.state.rawValue)"
+            validationIssues = []; validationSummary = nil
+            windowsFirmwareCodePath = ""; windowsFirmwareVariablesPath = ""
+            outgoingMessage = ""; pairingCode = ""; diskRevision += 1
+            attachDisposableDisk = false
+            workspaceRevision += 1
+            recentPaths.removeAll { $0 == folder.path }
+            recentPaths.insert(folder.path, at: 0)
+            recentPaths = Array(recentPaths.prefix(30))
+            preferences?.set(recentPaths, forKey: "recentVMPaths")
+            refreshManagedVMs()
             refreshNetworkInterfaces()
             refreshExchange()
-        } catch { hardwareStatus = "Load failed: \(error.localizedDescription)"; connectivityStatus = hardwareStatus }
+        } catch {
+            hardwareStatus = "Load failed: \(error.localizedDescription)"; connectivityStatus = hardwareStatus
+            vmFailure = error.localizedDescription; vmStatus = "Could not open the VM folder"
+        }
     }
 
     func saveConnectivity() {
@@ -137,11 +257,16 @@ final class AppModel: ObservableObject {
         do {
             refreshNetworkInterfaces()
             try VMConnectivityPolicy.verify(connectivity, vmFolder: folder, validInterfaces: Set(networkInterfaces))
+            if currentManifest?.guestOS == .windowsARM {
+                guard connectivity.networkMode != .bridged, connectivity.sharedFolderPath == nil,
+                      !connectivity.guestToolsEnabled else { throw VMGuestError.unsupportedWindowsSettings }
+            }
             try VMConnectivityStore.save(connectivity, to: folder)
             if connectivity.guestToolsEnabled {
                 try HostGuestExchange.createIfNeeded(in: folder)
                 try VBGuestToolsTransport.prepare(root: HostGuestExchange.root(for: folder))
             }
+            savedConnectivity = connectivity
             connectivityStatus = "Saved network and guest-tools settings. Changes take effect on next boot."
         } catch { connectivityStatus = "Save rejected: \(error.localizedDescription)" }
     }
@@ -177,7 +302,11 @@ final class AppModel: ObservableObject {
         Task.detached(priority: .utility) { [weak self] in
             guard let model = self else { return }
             do {
+                var lastProgressUpdate = Date.distantPast
                 let receipt = try VBGuestToolsTransport.stageFile(url, origin: "host", root: root) { fraction in
+                    let now = Date()
+                    guard fraction >= 1 || now.timeIntervalSince(lastProgressUpdate) >= 0.1 else { return }
+                    lastProgressUpdate = now
                     Task { @MainActor [weak model] in model?.transferProgress = fraction }
                 }
                 await MainActor.run {
@@ -315,6 +444,8 @@ final class AppModel: ObservableObject {
 
     func bootManagedVM() async {
         guard !isVMInUse else { vmStatus = "Stop the current VM before starting another"; return }
+        guard !hasUnsavedChanges else { vmStatus = "Save or reload your changes before starting this VM"; return }
+        vmFailure = nil; shutdownRequested = false
         vmOperationInProgress = true
         defer { vmOperationInProgress = false }
         guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an absolute VM folder path"; return }
@@ -340,7 +471,21 @@ final class AppModel: ObservableObject {
             }
             vmRevision += 1
             vmStatus = "\(guestOS.title) VM started" + (vm.usesExternalConsole ? " in the QEMU window; Control + Option + G releases input" : "")
-        } catch { vmStatus = "Boot failed: \(error.localizedDescription)" }
+        } catch { vmFailure = error.localizedDescription; vmStatus = "Boot failed: \(error.localizedDescription)" }
+    }
+
+    func requestShutdown() {
+        guard !vmOperationInProgress, !provisioning else { return }
+        do {
+            try vm.requestShutdown()
+            shutdownRequested = true
+            vmStatus = "Shutdown requested. Waiting for the guest; use Force stop if it does not respond."
+        } catch { vmFailure = error.localizedDescription; vmStatus = "Shutdown request failed: \(error.localizedDescription)" }
+    }
+
+    func showExternalConsole() {
+        guard let pid = vm.externalConsoleProcessID else { return }
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     }
 
     func stopVM() async {
@@ -352,14 +497,24 @@ final class AppModel: ObservableObject {
             activeDiskGrant?.releaseAfterVMStops()
             activeDiskGrant = nil
             vmRevision += 1
-            vmStatus = "VM stopped; read-only disk lease released"
+            shutdownRequested = false
+            vmStatus = "VM stopped; disk images released"
         }
         catch { vmStatus = "Stop failed: \(error.localizedDescription)" }
     }
     func refreshManagedVMs() {
-        guard vmFolderPath.hasPrefix("/") else { knownVMs = []; return }
-        let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
-        knownVMs = VMRegistry.discover(in: folder.deletingLastPathComponent())
+        var records: [String: (url: URL, record: ManagedVMManifest)] = [:]
+        for path in recentPaths {
+            let folder = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+            if let record = try? VMRegistry.read(at: folder) { records[folder.path] = (folder, record) }
+        }
+        if vmFolderPath.hasPrefix("/") {
+            for item in VMRegistry.discover(in: URL(fileURLWithPath: vmFolderPath).deletingLastPathComponent()) {
+                let folder = item.url.standardizedFileURL.resolvingSymlinksInPath()
+                records[folder.path] = (folder, item.record)
+            }
+        }
+        knownVMs = records.values.sorted { $0.record.createdAt > $1.record.createdAt }
     }
 
     func provisionVM() async {
@@ -369,6 +524,7 @@ final class AppModel: ObservableObject {
             vmStatus = "Choose a new VM folder path and local \(guestOS == .macOS ? "IPSW" : "ARM64 ISO")"; return
         }
         provisioning = true
+        vmFailure = nil
         hardwareLoaded = true
         installProgress = 0
         let progressMonitor = Task { @MainActor in
@@ -378,7 +534,18 @@ final class AppModel: ObservableObject {
             }
         }
         vmStatus = "Preparing \(guestOS.title) installation"
-        defer { progressMonitor.cancel(); provisioning = false; vmRevision += 1; refreshManagedVMs() }
+        defer {
+            progressMonitor.cancel(); provisioning = false; vmRevision += 1
+            let folder = URL(fileURLWithPath: vmFolderPath)
+            if let record = try? VMRegistry.read(at: folder) {
+                selectedManifest = record; loadedFolderPath = folder.path
+                loadGuestDetails(from: folder, record: record)
+                savedHardware = hardware; savedConnectivity = connectivity
+                recentPaths.removeAll { $0 == folder.path }; recentPaths.insert(folder.path, at: 0)
+                recentPaths = Array(recentPaths.prefix(30)); preferences?.set(recentPaths, forKey: "recentVMPaths")
+            }
+            refreshManagedVMs()
+        }
         do {
             let folder = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
             if guestOS == .macOS {
@@ -397,7 +564,7 @@ final class AppModel: ObservableObject {
                 try await vm.startExistingVM(at: folder)
                 vmStatus = "\(guestOS.title) installer running\(vm.usesExternalConsole ? " in the QEMU window" : " in the guest console"). Complete setup, shut down the guest, then Finish installation and eject ISO."
             }
-        } catch { vmStatus = "Installation failed: \(error.localizedDescription). Incomplete VM data was retained." }
+        } catch { vmFailure = error.localizedDescription; vmStatus = "Installation failed: \(error.localizedDescription). Incomplete VM data was retained." }
     }
 
     var isVMInUse: Bool { provisioning || vmOperationInProgress || vm.operationInProgress || vm.hasSession }
@@ -406,6 +573,7 @@ final class AppModel: ObservableObject {
         guard !isVMInUse else { vmStatus = "Shut down and stop the VM before finishing installation"; return }
         do {
             try vm.finishARMInstallation(at: URL(fileURLWithPath: vmFolderPath))
+            loadGuestDetails(from: URL(fileURLWithPath: vmFolderPath))
             refreshManagedVMs()
             vmStatus = "Installation acknowledged; the installer ISO will be ejected on the next boot"
         } catch { vmStatus = "Could not finish installation: \(error.localizedDescription)" }
@@ -433,13 +601,14 @@ final class AppModel: ObservableObject {
             }
             record.installationMediaPath = installer?.path
             try VMRegistry.write(record, at: folder)
+            selectedManifest = record
             refreshManagedVMs()
             vmStatus = "Saved ARM media and executable paths for the next boot"
         } catch { vmStatus = "Media update failed: \(error.localizedDescription)" }
     }
 
     func canBeginQuit() -> Bool {
-        guard !provisioning, !vmOperationInProgress, !vm.operationInProgress else {
+        guard !provisioning, !vmOperationInProgress, !vm.operationInProgress, !transferInProgress else {
             vmStatus = "Wait for the current VM operation to finish before quitting"
             return false
         }
@@ -459,6 +628,7 @@ final class AppModel: ObservableObject {
             saved.bootDiskPath = next.bootDiskPath
             saved.additionalDisks = next.additionalDisks
             try VMHardwareStore.save(saved, to: folder)
+            savedHardware = saved
         }
         hardware = next
         diskRevision += 1
@@ -492,6 +662,17 @@ final class AppModel: ObservableObject {
         } catch { diskImageStatus = "Detach failed: \(error.localizedDescription)" }
     }
 
+    func setDiskReadOnly(_ disk: VMAdditionalDisk, _ readOnly: Bool) {
+        do {
+            try updateDiskSelection { settings in
+                if let index = settings.additionalDisks.firstIndex(where: { $0.id == disk.id }) {
+                    settings.additionalDisks[index].readOnly = readOnly
+                }
+            }
+            diskImageStatus = "Disk access saved for the next boot"
+        } catch { diskImageStatus = "Access update failed: \(error.localizedDescription)" }
+    }
+
     func createDiskImage(at url: URL, sizeGiB: Int, asBootDisk: Bool) {
         guard !isVMInUse else { diskImageStatus = VMDiskImageError.inUse.localizedDescription; return }
         do {
@@ -512,6 +693,7 @@ final class AppModel: ObservableObject {
                var manifest = try? VMRegistry.read(at: folder) {
                 manifest.diskSizeGiB = sizeGiB
                 try VMRegistry.write(manifest, at: folder)
+                if loadedFolderPath == folder.path { selectedManifest = manifest }
                 refreshManagedVMs()
             }
             diskImageStatus = "Image grown to \(sizeGiB) GiB. Expand the partition and filesystem inside the guest to use the new space."

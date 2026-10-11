@@ -1,6 +1,6 @@
 # Disk images
 
-Open **Managed VM → Disks** to manage raw `.img` and `.raw` files. Create a sparse image with 1–2048 GiB capacity, load an existing image, grow its capacity, detach it, or permanently delete its file. Boot images require at least 64 GiB. The panel reports both virtual capacity and actual space allocated on the host.
+Open **Virtual machines → Disks** to manage raw `.img` and `.raw` files. Create a sparse image with 1–2048 GiB capacity, load an existing image, grow its capacity, detach it, or permanently delete its file. Boot images require at least 64 GiB. The panel reports both virtual capacity and actual space allocated on the host. Disk selection and access changes save automatically for an existing VM; other hardware edits retain their unsaved status.
 
 For a new macOS installation, enter a new VM folder path in Overview and select an Apple IPSW. Use the default boot image (`disk.img` in the new folder), or choose/create a boot image in Disks first. **Install macOS** confirms possible data loss before installing into a selected existing image. The installer writes to that image directly; it does not copy it into the VM folder.
 

@@ -5,7 +5,7 @@ find App Core Helpers Privileged Tools/GuestAgent Tools/HostTool -name '*.swift'
 python3 - <<'PY2'
 import plistlib
 from pathlib import Path
-for p in [Path('Resources/Info.plist'),Path('Helpers/VolumeBootDiskBroker/Info.plist'),Path('Resources/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist')]:
+for p in [Path('Resources/Info.plist'),Path('Helpers/VolumeBootDiskBroker/Info.plist'),Path('Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist')]:
     with p.open('rb') as f: plistlib.load(f)
 print('Plist validation: OK')
 PY2
@@ -19,6 +19,7 @@ PY2
 
 ./Scripts/test-topology-proof.sh
 python3 Scripts/check-project-sources.py
+python3 Tests/ProjectStructureTests.py
 
 ./Scripts/test-connectivity.sh
 ./Scripts/test-disk-images.sh

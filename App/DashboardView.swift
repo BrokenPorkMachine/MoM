@@ -3,20 +3,45 @@ import AppKit
 
 struct DashboardView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selectedTab = 0
-    @State private var selectedVMSection = 0
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedTab = 1
+    private let initialWorkspaceSection: VMWorkspaceSection
+
+    init(initialWorkspaceSection: VMWorkspaceSection = .overview) {
+        self.initialWorkspaceSection = initialWorkspaceSection
+    }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedTab) {
-                Label("Storage inventory", systemImage: "externaldrive").tag(0)
-                Label("Installations", systemImage: "internaldrive").tag(3)
-                Label("Managed VM", systemImage: "desktopcomputer").tag(1)
-                Label("Network & Guest Tools", systemImage: "network").tag(4)
-                Label("Research laboratory", systemImage: "testtube.2").tag(2)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "square.stack.3d.up.fill").font(.title2).foregroundColor(Color(red: 0.15, green: 0.5, blue: 0.98))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("VolumeBoot").font(.headline)
+                        Text("Virtual workspace manager").font(.caption).foregroundStyle(.secondary)
+                    }
+                }.foregroundColor(sidebarForeground).padding(20)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        sidebarGroup("Workspace") {
+                            sidebarItem("Virtual machines", symbol: "desktopcomputer", tab: 1)
+                            sidebarItem("Network & guest tools", symbol: "network", tab: 4)
+                        }
+                        sidebarGroup("Host storage") {
+                            sidebarItem("Storage inventory", symbol: "externaldrive", tab: 0)
+                            sidebarItem("macOS installations", symbol: "internaldrive", tab: 3)
+                        }
+                        sidebarGroup("Advanced") { sidebarItem("Research", symbol: "testtube.2", tab: 2) }
+                    }.padding(.horizontal, 12).padding(.vertical, 16)
+                }
+                Divider()
+                VStack(alignment: .leading, spacing: 7) {
+                    Label("Apple Silicon · ARM64", systemImage: "cpu").font(.caption.weight(.medium))
+                    Text("Local virtualization").font(.caption).foregroundStyle(.secondary)
+                }.foregroundColor(sidebarForeground).padding(20)
             }
-            .navigationTitle("VolumeBoot")
-            .listStyle(.sidebar)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
         } detail: {
             Group {
                 switch selectedTab {
@@ -24,22 +49,59 @@ struct DashboardView: View {
                 case 3: installationsView
                 case 4: connectivityView
                 case 2: research
-                default: inventory
+                default: ScrollView { inventory }
                 }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .toolbar {
+                ToolbarItemGroup {
+                    Button {
+                        if WorkspaceActions.allowDiscard(model) { model.beginNewVM(); selectedTab = 1 }
+                    } label: { Label("New VM", systemImage: "plus") }
+                    .disabled(!model.canSelectVM).help("Create a virtual machine")
+                    Button {
+                        WorkspaceActions.openVM(model); selectedTab = 1
+                    } label: { Label("Open VM", systemImage: "folder") }
+                    .disabled(!model.canSelectVM).help("Open an existing VM folder")
+                }
+            }
         }
         .task {
             model.refreshNetworkInterfaces()
-            await model.scan()
+        }
+        .task(id: selectedTab) {
+            if (selectedTab == 0 || selectedTab == 3) && model.devices.isEmpty { await model.scan() }
+        }
+        .onChange(of: model.workspaceRevision) { _, _ in selectedTab = 1 }
+    }
+
+    private func sidebarGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.caption.weight(.semibold)).foregroundColor(sidebarForeground.opacity(0.7)).padding(.horizontal, 8)
+            content()
         }
     }
+
+    private func sidebarItem(_ title: String, symbol: String, tab: Int) -> some View {
+        Button { selectedTab = tab } label: {
+            Label(title, systemImage: symbol)
+                .font(.callout.weight(selectedTab == tab ? .semibold : .regular))
+                .foregroundColor(selectedTab == tab ? Color(red: 0.15, green: 0.5, blue: 0.98) : sidebarForeground)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(.vertical, 11)
+                .background(selectedTab == tab ? Color.blue.opacity(0.13) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityAddTraits(selectedTab == tab ? [.isSelected] : [])
+    }
+
+    private var sidebarForeground: Color { Color(white: colorScheme == .dark ? 0.9 : 0.12) }
 
     private var inventory: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Local storage").font(.largeTitle.bold())
+                Text("Storage inventory").font(.title2.bold())
                 Spacer()
                 Button("Rescan") { Task { await model.scan() } }.disabled(model.scanInProgress)
             }
@@ -50,6 +112,13 @@ struct DashboardView: View {
                 TableColumn("Name", value: \.name)
                 TableColumn("Filesystem", value: \.filesystem)
                 TableColumn("Mount", value: \.mountPoint)
+            }
+            .frame(minHeight: 240, idealHeight: 300)
+            .overlay {
+                if model.devices.isEmpty {
+                    ContentUnavailableView(model.scanInProgress ? "Scanning storage" : "No storage records", systemImage: "externaldrive",
+                        description: Text(model.scanInProgress ? "Reading the host storage inventory…" : model.status))
+                }
             }
             if let selected = model.devices.first(where: { $0.id == model.selectedDeviceID }) {
                 let verdict = model.inspect(selected)
@@ -65,7 +134,7 @@ struct DashboardView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            GroupBox("Physical device preflight (read-only)") {
+            DisclosureGroup("Physical device diagnostics") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(model.diskPreflightStatus).font(.caption).textSelection(.enabled)
                     Button("Check selected device") { Task { await model.checkSelectedPhysicalDevice() } }
@@ -79,7 +148,7 @@ struct DashboardView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
-            GroupBox("Privileged daemon — signed deployment") {
+            DisclosureGroup("Privileged service administration") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(model.privilegedDaemonStatus).font(.caption).textSelection(.enabled)
                     Text(model.privilegedDaemonDiagnostic).font(.caption).textSelection(.enabled)
@@ -109,7 +178,7 @@ struct DashboardView: View {
     private var installationsView: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("macOS installation candidates").font(.largeTitle.bold())
+                Text("macOS installations").font(.title2.bold())
                 Spacer()
                 Button("Rescan") { Task { await model.scan() } }.disabled(model.scanInProgress)
             }
@@ -129,166 +198,7 @@ struct DashboardView: View {
     }
 
     private var managedVM: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Managed virtual machine").font(.largeTitle.bold())
-                    Text("Install and run macOS, ARM Linux, or Windows ARM.").foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "cpu.fill").font(.system(size: 34)).foregroundStyle(.blue.gradient)
-                    .padding(18).background(.blue.opacity(0.09), in: RoundedRectangle(cornerRadius: 18))
-            }
-            Picker("VM workspace", selection: $selectedVMSection) {
-                Text("Overview").tag(0)
-                Text("Hardware").tag(1)
-                Text("Disks").tag(2)
-            }.pickerStyle(.segmented).frame(maxWidth: 320)
-            if selectedVMSection == 0 { vmOverview }
-            else if selectedVMSection == 1 { hardwareConfiguration }
-            else { VMDiskImagesView() }
-        }
-    }
-
-    private var vmOverview: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Picker("Guest operating system", selection: $model.guestOS) {
-                ForEach(VMGuestOS.allCases) { Text($0.title).tag($0) }
-            }.disabled(model.isVMInUse)
-                .onChange(of: model.guestOS) { _, guest in
-                    if guest != .macOS {
-                        model.hardware.keyboard = .usb
-                        model.hardware.pointer = .mouse
-                        model.connectivity.guestToolsEnabled = false
-                    }
-                    if guest == .windowsARM {
-                        model.attachDisposableDisk = false
-                        model.hardware.microphoneEnabled = false
-                        model.connectivity.guestToolsEnabled = false
-                        model.connectivity.sharedFolderPath = nil
-                        if model.connectivity.networkMode == .bridged { model.connectivity.networkMode = .nat }
-                    }
-                }
-            HStack {
-                TextField("VM bundle folder", text: $model.vmFolderPath)
-                Button("Choose…") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    if panel.runModal() == .OK, let url = panel.url { model.loadHardwareProfile(for: url) }
-                }
-            }.disabled(model.isVMInUse)
-            installationMediaControls.disabled(model.isVMInUse)
-            if model.guestOS != .macOS {
-                Button("Save media and backend paths for existing VM") { model.saveARMGuestMedia() }
-                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
-            }
-            Stepper("New boot disk: \(model.diskSizeGiB) GiB", value: $model.diskSizeGiB, in: 64...2048, step: 16)
-                .disabled(model.isVMInUse || model.hardware.bootDiskPath != nil)
-            if let path = model.hardware.bootDiskPath {
-                Text("Installation target: \(path)").font(.caption).textSelection(.enabled)
-            }
-            Button("Manage disk images") { selectedVMSection = 2 }
-            HStack(spacing: 12) {
-                Label("\(model.hardware.cpuCount) CPU cores", systemImage: "cpu")
-                Label("\(model.hardware.memoryGiB) GiB memory", systemImage: "memorychip")
-                Label(model.hardware.display.title, systemImage: "display")
-            }.font(.subheadline).foregroundStyle(.secondary)
-            Toggle("Attach selected BLANK external disk as read-only secondary storage", isOn: $model.attachDisposableDisk)
-                .disabled(model.guestOS == .windowsARM || model.isVMInUse)
-            Text("Requires signed and approved root daemon. Only disposable, unmounted, unpartitioned external disks are accepted. The selected physical disk is NEVER the VM boot disk.")
-                .font(.caption).foregroundStyle(.orange)
-            HStack {
-                Button(model.guestOS == .macOS ? "Install macOS" : "Create and start installer") { installGuest() }
-                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty ||
-                        (model.guestOS == .macOS ? model.restoreImagePath.isEmpty : model.installationISOPath.isEmpty))
-                Button("Start VM") { Task { await model.bootManagedVM() } }
-                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
-                Button("Stop") { Task { await model.stopVM() } }
-                    .disabled(model.provisioning || model.vmOperationInProgress || !model.vm.hasSession)
-            }
-            if model.guestOS != .macOS {
-                Button("Finish installation and eject ISO…") { finishISOInstallation() }
-                    .disabled(model.isVMInUse || model.vmFolderPath.isEmpty)
-            }
-            if model.provisioning && model.guestOS == .macOS {
-                ProgressView(value: min(max(model.installProgress, 0), 1)) {
-                    Text("Installing macOS")
-                } currentValueLabel: {
-                    Text("\(Int(model.installProgress * 100))%")
-                }
-            }
-            Text(model.vmStatus).foregroundStyle(.secondary)
-            GroupBox("Detected managed VMs") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("VM records in destination parent folder")
-                        Spacer()
-                        Button("Refresh") { model.refreshManagedVMs() }
-                    }
-                    ForEach(model.knownVMs, id: \.record.id) { entry in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(entry.url.lastPathComponent).font(.headline)
-                                Text("\(entry.record.guestOS.title) · \(entry.record.state.rawValue)").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Select") { model.loadHardwareProfile(for: entry.url) }
-                                .disabled(model.isVMInUse)
-                        }
-                    }
-                }
-            }
-            GroupBox("Guest console") {
-                if model.guestOS == .windowsARM {
-                    ContentUnavailableView("Windows ARM console", systemImage: "desktopcomputer", description:
-                        Text("QEMU opens the Windows display in its own window. Control + Option + G captures/releases input. Close that window or use Stop to end the VM."))
-                        .frame(minWidth: 550, minHeight: 220)
-                } else {
-                    VMConsoleView(virtualMachine: model.vm.virtualMachine, hardware: model.hardware)
-                        .id(model.vmRevision)
-                        .frame(minWidth: 550, minHeight: 300)
-                }
-            }
-            Text("Use a new destination folder for installation, a compatible Apple IPSW or ARM64 ISO, and sufficient disk space. After an ISO installation, shut down the guest, click Stop, then Finish installation and eject ISO before starting from disk.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private var installationMediaControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if model.guestOS == .macOS {
-                mediaPicker("Apple macOS restore image (.ipsw)", extension: "ipsw", selection: $model.restoreImagePath)
-            } else {
-                mediaPicker("ARM64 / AArch64 installer ISO", extension: "iso", selection: $model.installationISOPath)
-                Text("Use an ARM64 / AArch64 image; x86 installers cannot boot these VMs.").font(.caption).foregroundStyle(.secondary)
-                if model.guestOS == .windowsARM {
-                    mediaPicker("Optional ARM64 VirtIO driver ISO", extension: "iso", selection: $model.windowsDriverISOPath)
-                    Text("Windows uses QEMU 9.2 or newer, persistent UEFI and TPM 2.0. Install ARM64 VirtIO network drivers from the driver ISO during setup. NAT or disconnected networking is supported.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    DisclosureGroup("Windows backend paths (automatically detected for Homebrew)") {
-                        TextField("qemu-system-aarch64 executable", text: $model.qemuExecutablePath)
-                        TextField("swtpm executable", text: $model.swtpmExecutablePath)
-                        TextField("AArch64 UEFI code firmware", text: $model.windowsFirmwareCodePath)
-                        TextField("UEFI variable-store template", text: $model.windowsFirmwareVariablesPath)
-                        Text("Firmware templates apply when creating a new VM. Existing VMs retain their copied firmware and variable store.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private func mediaPicker(_ title: String, extension suffix: String, selection: Binding<String>) -> some View {
-        HStack {
-            TextField(title, text: selection)
-            Button("Choose…") {
-                let panel = NSOpenPanel()
-                panel.allowedContentTypes = [.init(filenameExtension: suffix)!]
-                panel.canChooseDirectories = false
-                if panel.runModal() == .OK { selection.wrappedValue = panel.url?.path ?? "" }
-            }
-        }
+        VMWorkspaceView(hardware: hardwareConfiguration, network: connectivityView, initialSection: initialWorkspaceSection)
     }
 
     private var hardwareConfiguration: some View {
@@ -297,25 +207,25 @@ struct DashboardView: View {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Instance hardware").font(.title2.bold())
-                        Text("Tune this Mac’s virtual hardware. Changes are saved with the selected VM.")
+                        Text("Allocate resources and configure the guest. Saved changes apply at the next start.")
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Menu("Presets") {
-                        Button("Balanced · 4 cores / 8 GB") { applyHardwarePreset(cpu: 4, memory: 8) }
-                        Button("Performance · 8 cores / 16 GB") { applyHardwarePreset(cpu: 8, memory: 16) }
-                        Button("Lightweight · 2 cores / 4 GB") { applyHardwarePreset(cpu: 2, memory: 4) }
+                        Button("Balanced · 4 cores / 8 GiB") { applyHardwarePreset(cpu: 4, memory: 8) }
+                        Button("Performance · 8 cores / 16 GiB") { applyHardwarePreset(cpu: 8, memory: 16) }
+                        Button("Lightweight · 2 cores / 4 GiB") { applyHardwarePreset(cpu: 2, memory: 4) }
                     }
                 }
                 HStack {
-                    TextField("Selected VM folder", text: $model.vmFolderPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Load profile") { model.loadConnectivity() }
+                    Text(model.vmFolderPath.isEmpty ? "New workspace" : model.vmFolderPath)
+                        .font(.callout.monospaced()).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Button("Reload saved profile…") { if WorkspaceActions.allowDiscard(model) { model.loadConnectivity() } }.disabled(!model.canSelectVM || model.currentManifest == nil)
                         .disabled(model.vmFolderPath.isEmpty)
                 }
                 HStack(spacing: 12) {
                     metricCard("PROCESSING", value: "\(model.hardware.cpuCount) cores", icon: "cpu.fill", tint: .blue)
-                    metricCard("MEMORY", value: "\(model.hardware.memoryGiB) GB", icon: "memorychip.fill", tint: .purple)
+                    metricCard("MEMORY", value: "\(model.hardware.memoryGiB) GiB", icon: "memorychip.fill", tint: .purple)
                     metricCard("DISPLAY", value: model.hardware.display.title, icon: "display", tint: .orange)
                 }
                 GroupBox {
@@ -323,7 +233,7 @@ struct DashboardView: View {
                         sectionHeading("Identity", subtitle: "A friendly name for this VM instance")
                         TextField("For example, Development VM", text: $model.hardware.displayName)
                             .textFieldStyle(.roundedBorder)
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 16) {
@@ -331,7 +241,7 @@ struct DashboardView: View {
                         HStack(spacing: 24) {
                             VStack(alignment: .leading, spacing: 9) {
                                 Label("Virtual CPU", systemImage: "cpu")
-                                Stepper("\(model.hardware.cpuCount) cores", value: $model.hardware.cpuCount, in: 2...max(2, ProcessInfo.processInfo.processorCount), step: 1)
+                                Stepper("\(model.hardware.cpuCount) cores", value: $model.hardware.cpuCount, in: 2...model.maximumCPUCount, step: 1)
                                 Text("Host has \(ProcessInfo.processInfo.processorCount) logical cores").font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                             VStack(alignment: .leading, spacing: 9) {
@@ -340,7 +250,7 @@ struct DashboardView: View {
                                 Text("Leave room for macOS and other apps").font(.caption).foregroundStyle(.secondary)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 14) {
@@ -353,7 +263,7 @@ struct DashboardView: View {
                         }.pickerStyle(.segmented).disabled(model.guestOS == .windowsARM)
                         Toggle("Resize guest display with the VM window", isOn: $model.hardware.automaticallyResizeDisplay)
                             .disabled(model.guestOS == .windowsARM)
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 13) {
@@ -365,18 +275,23 @@ struct DashboardView: View {
                             Label("The guest may request microphone access from macOS.", systemImage: "mic.badge.waveform")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
-                GroupBox {
+                DisclosureGroup("Host device access") {
                     VStack(alignment: .leading, spacing: 13) {
-                        sectionHeading("Device passthrough", subtitle: "Host hardware access follows Apple’s virtualization APIs")
+                        sectionHeading("Device passthrough", subtitle: "Virtual devices provide guest access to supported host resources")
                         Label("Apple Neural Engine passthrough is not exposed by Virtualization.framework. Guests cannot claim the host ANE directly.", systemImage: "cpu")
                             .font(.callout).foregroundStyle(.secondary)
                         Label("Physical GPU passthrough is not available for macOS guests. Apple’s Mac graphics device is managed by the host virtualization framework.", systemImage: "display")
                             .font(.callout).foregroundStyle(.secondary)
-                        Label("USB accessory passthrough is available only on macOS 27+ through Apple’s AccessoryAccess flow; this app’s deployment target is macOS 15.", systemImage: "cable.connector")
+                        Label("Direct USB accessory passthrough is unavailable in this release.", systemImage: "cable.connector")
                             .font(.callout).foregroundStyle(.secondary)
-                    }.padding(4)
+                        Divider()
+                        Toggle("Attach the selected disposable external disk (read only)", isOn: $model.attachDisposableDisk)
+                            .disabled(model.guestOS == .windowsARM)
+                        Text("Select a blank external scratch disk in Storage inventory first. Attachment requires the signed privileged service and applies only to this session.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 13) {
@@ -401,7 +316,7 @@ struct DashboardView: View {
                         Text(model.guestOS == .windowsARM ? "Use QEMU’s window controls for mouse capture and release." :
                              "The release hotkey always stays on the host. Input also releases when the app or VM window loses focus.")
                             .font(.caption).foregroundStyle(.secondary)
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 GroupBox {
                     VStack(alignment: .leading, spacing: 13) {
@@ -414,7 +329,7 @@ struct DashboardView: View {
                             ContentUnavailableView("No extra disks", systemImage: "externaldrive", description: Text("The VM’s main disk is always attached automatically."))
                                 .frame(height: 100)
                         } else {
-                            ForEach($model.hardware.additionalDisks) { $disk in
+                            ForEach(model.hardware.additionalDisks) { disk in
                                 HStack(spacing: 12) {
                                     Image(systemName: "externaldrive.fill").foregroundStyle(.blue)
                                     VStack(alignment: .leading, spacing: 3) {
@@ -422,7 +337,7 @@ struct DashboardView: View {
                                         Text(disk.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                                     }
                                     Spacer()
-                                    Toggle("Read only", isOn: $disk.readOnly).toggleStyle(.switch)
+                                    Toggle("Read only", isOn: Binding(get: { disk.readOnly }, set: { model.setDiskReadOnly(disk, $0) })).toggleStyle(.switch)
                                     Button { model.detachDiskImage(disk) } label: {
                                         Image(systemName: "minus.circle")
                                     }.buttonStyle(.borderless)
@@ -432,7 +347,7 @@ struct DashboardView: View {
                         }
                         Text("Disk images only. Raw device paths and files inside the VM bundle are rejected.")
                             .font(.caption).foregroundStyle(.secondary)
-                    }.padding(4)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
                 HStack {
                     Image(systemName: model.hardwareLoaded ? "checkmark.circle.fill" : "info.circle.fill")
@@ -441,7 +356,7 @@ struct DashboardView: View {
                     Spacer()
                     Button("Save hardware") { model.saveHardware() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!model.hardwareLoaded || model.vm.virtualMachine != nil || model.provisioning)
+                        .disabled(model.currentManifest == nil || !model.hasUnsavedHardware || model.isVMInUse)
                 }.padding(.vertical, 4)
                 Text("Hardware changes apply on the next VM start. Provisioning uses the current hardware profile; after installation, each instance has its own saved profile.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -452,17 +367,12 @@ struct DashboardView: View {
     }
 
     private func applyHardwarePreset(cpu: Int, memory: Int) {
-        model.hardware.cpuCount = min(cpu, max(2, ProcessInfo.processInfo.processorCount))
-        model.hardware.memoryGiB = min(memory, max(4, min(64, Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) - 4)))
+        model.hardware.cpuCount = min(cpu, model.maximumCPUCount)
+        model.hardware.memoryGiB = min(memory, model.safeMaximumMemoryGiB)
     }
 
     private func metricCard(_ title: String, value: String, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Image(systemName: icon).font(.title3).foregroundStyle(tint)
-            Text(title).font(.system(size: 9, weight: .bold, design: .rounded)).tracking(1.1).foregroundStyle(.secondary)
-            Text(value).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 14))
+        WorkspaceMetric(title: title.capitalized, value: value, symbol: icon)
     }
 
     private func sectionHeading(_ title: String, subtitle: String) -> some View {
@@ -483,38 +393,16 @@ struct DashboardView: View {
         }
     }
 
-    private func installGuest() {
-        if let path = model.hardware.bootDiskPath {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Install \(model.guestOS.title) into the selected disk image?"
-            alert.informativeText = "Installation can erase all existing data in this image:\n\n\(path)"
-            alert.addButton(withTitle: "Cancel")
-            alert.addButton(withTitle: "Install \(model.guestOS.title)")
-            guard alert.runModal() == .alertSecondButtonReturn else { return }
-        }
-        Task { await model.provisionVM() }
-    }
-
-    private func finishISOInstallation() {
-        let alert = NSAlert()
-        alert.messageText = "Finish this ISO installation?"
-        alert.informativeText = "Complete the guest installer and shut down the guest first. This marks the VM ready and removes the installation ISO from subsequent boots."
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Finish and eject ISO")
-        if alert.runModal() == .alertSecondButtonReturn { model.finishARMInstallation() }
-    }
-
     private var connectivityView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Network & Guest Integration").font(.largeTitle.bold())
+                Text("Network & guest tools").font(.title2.bold())
                 Text("Network settings and shared directories belong to a specific managed VM. Changes take effect on next boot.")
                     .foregroundStyle(.secondary)
                 HStack {
-                    TextField("Installed VM folder", text: $model.vmFolderPath)
-                    Button("Load profile") { model.loadConnectivity() }
-                    Button("Save profile") { model.saveConnectivity() }
+                    Text(model.vmFolderPath.isEmpty ? "Choose a workspace" : model.vmFolderPath).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                    Button("Reload saved profile…") { if WorkspaceActions.allowDiscard(model) { model.loadConnectivity() } }.disabled(!model.canSelectVM || model.currentManifest == nil)
+                    Button("Save network") { model.saveConnectivity() }.disabled(model.currentManifest == nil || !model.hasUnsavedConnectivity || model.isVMInUse)
                 }
                 Text(model.connectivityStatus).font(.caption).foregroundStyle(.secondary)
                 GroupBox("Guest networking") {
@@ -540,7 +428,7 @@ struct DashboardView: View {
                         Text("NAT gives guests outbound connectivity. It does not automatically make guest services reachable from the LAN.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }
+                }.disabled(model.isVMInUse)
                 GroupBox("Host workspace share — VirtioFS") {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -561,10 +449,10 @@ struct DashboardView: View {
                              "macOS guests automatically mount shares under /Volumes/My Shared Files/. A VM bundle or ancestor directory is not an eligible share.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }.disabled(model.guestOS == .windowsARM)
+                }.disabled(model.guestOS == .windowsARM || model.isVMInUse)
                 GroupBox("Guest companion tools") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Enable explicit host–guest exchange", isOn: $model.connectivity.guestToolsEnabled)
+                        Toggle("Enable explicit host–guest exchange", isOn: $model.connectivity.guestToolsEnabled).disabled(model.isVMInUse)
                         Text("The guest receives a separate read/write Exchange folder. This data-only channel never executes received messages or scripts.")
                             .font(.caption).foregroundStyle(.secondary)
                         HStack {
@@ -638,7 +526,7 @@ struct DashboardView: View {
 
     private var research: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Boot research laboratory").font(.largeTitle.bold())
+            Text("Research laboratory").font(.title2.bold())
             Text("No physical macOS installation boot or boot-policy modification is performed by this build. Blank external test-disk attachment is experimental.")
             Text("See Docs/EXPERIMENTS.md for controlled, non-destructive test procedures.")
                 .foregroundStyle(.secondary)

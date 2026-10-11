@@ -22,11 +22,49 @@ struct AppDiskWorkflowTests {
                                               state: .installed, lastFailure: nil), at: bundle)
         let model = AppModel()
         model.loadHardwareProfile(for: bundle)
+        let alias = scratch.appendingPathComponent("VM shortcut")
+        try fm.createSymbolicLink(at: alias, withDestinationURL: bundle)
+        model.loadHardwareProfile(for: alias)
+        check(model.vmFolderPath == bundle.path, "workspace aliases use the canonical folder")
+        check(model.knownVMs.filter { $0.url.path == bundle.path }.count == 1, "library deduplicates filesystem aliases")
         let storage = scratch.appendingPathComponent("Storage.raw")
         model.createDiskImage(at: storage, sizeGiB: 1, asBootDisk: false)
         check(fm.fileExists(atPath: storage.path), "create workflow produces image")
         let attached = try VMHardwareStore.load(from: bundle)
         check(attached.additionalDisks.first?.path == storage.path, "attachment persisted")
+        check(!model.hasUnsavedHardware, "automatic disk attachment keeps saved baseline in sync")
+        model.setDiskReadOnly(model.hardware.additionalDisks[0], true)
+        let readOnly = try VMHardwareStore.load(from: bundle)
+        check(readOnly.additionalDisks[0].readOnly && !model.hasUnsavedHardware, "read-only access persists without dirty hardware")
+        let previousFolder = model.vmFolderPath
+        let previousHardware = model.hardware
+        model.loadHardwareProfile(for: scratch.appendingPathComponent("does-not-exist"))
+        check(model.vmFolderPath == previousFolder && model.hardware == previousHardware, "failed profile load preserves current selection")
+        let invalid = scratch.appendingPathComponent("Broken profile")
+        try fm.createDirectory(at: invalid, withIntermediateDirectories: false)
+        let invalidRecord = try VMRegistry.read(at: bundle)
+        try VMRegistry.write(invalidRecord, at: invalid)
+        var differentHardware = VMHardwareSettings.default
+        differentHardware.displayName = "Must not replace the current profile"
+        try VMHardwareStore.save(differentHardware, to: invalid)
+        try Data("invalid JSON".utf8).write(to: invalid.appendingPathComponent("connectivity.json"))
+        model.loadHardwareProfile(for: invalid)
+        check(model.vmFolderPath == previousFolder && model.hardware == previousHardware, "connectivity load failure cannot partially replace selection")
+        let futureRecord = ManagedVMManifest(version: 99, id: UUID(), createdAt: Date(), diskSizeGiB: 64,
+            state: .installed, lastFailure: nil)
+        try VMRegistry.write(futureRecord, at: invalid)
+        do { _ = try VMRegistry.read(at: invalid); fatalError("Expected future manifest rejection") }
+        catch { check(error.localizedDescription.contains("unsupported"), "future manifest rejected with recovery guidance") }
+        model.hardware.cpuCount += 1
+        check(model.hasUnsavedHardware && !model.canStartVM, "unsaved hardware blocks a misleading start")
+        await model.bootManagedVM()
+        check(model.vmStatus.contains("Save or reload"), "start never silently discards edits")
+        model.loadHardwareProfile(for: bundle)
+        check(!model.hasUnsavedChanges, "reload restores saved baseline")
+        differentHardware.cpuCount = 4
+        let readiness = VMReadiness.issues(folder: bundle, record: try VMRegistry.read(at: bundle), hardware: differentHardware,
+            connectivity: .default, interfaces: [], cpuRange: 2...2, maximumMemoryGiB: 4)
+        check(readiness.contains(VMHardwareError.invalidCPU.localizedDescription), "readiness respects host CPU limits")
         do {
             let activeLease = try VMDiskImageLease(url: storage)
             model.deleteDiskImage(at: storage)
@@ -91,6 +129,32 @@ struct AppDiskWorkflowTests {
         model.saveARMGuestMedia()
         let rejectedMedia = try VMRegistry.read(at: bundle)
         check(rejectedMedia.installationMediaPath == iso.path, "incomplete installation keeps installer on invalid media update")
+        model.loadHardwareProfile(for: bundle)
+        let savedGuest = model.guestOS
+        model.selectNewGuest(.macOS)
+        check(model.guestOS == savedGuest, "existing guest type is immutable in setup selector")
+        model.validateVMConfiguration()
+        check(!model.validationIssues.isEmpty, "readiness detects missing identity and firmware")
+        let preferences = MemoryVMPreferences()
+        let remembered = AppModel(preferences: preferences)
+        remembered.loadHardwareProfile(for: bundle)
+        let reopened = AppModel(preferences: preferences)
+        check(reopened.vmFolderPath == bundle.path && !reopened.knownVMs.isEmpty, "recent workspace survives model restart")
+        preferences.values.removeAll()
+        model.beginNewVM()
+        check(model.currentManifest == nil && model.vmFolderPath.isEmpty && model.hardware == .default && model.connectivity == .default,
+              "new workspace resets previous resources and media")
+        check(!model.hasUnsavedChanges, "empty new workspace has no discard warning")
+        model.restoreImagePath = iso.path
+        check(model.hasUnsavedChanges && model.currentManifest == nil, "configured draft participates in discard protection")
+        model.beginNewVM()
+        check(!model.hasUnsavedChanges, "discarding draft restores clean configuration")
         print("PASS: \(count) app disk workflow, persisted selection, manifest, and failed startup assertions")
     }
+}
+
+private final class MemoryVMPreferences: VMPreferences {
+    var values: [String: Any] = [:]
+    func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
+    func set(_ value: Any?, forKey key: String) { values[key] = value }
 }

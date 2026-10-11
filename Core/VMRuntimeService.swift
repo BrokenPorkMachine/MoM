@@ -2,7 +2,7 @@ import Foundation
 import Virtualization
 
 @MainActor
-final class VMRuntimeService {
+final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate {
     enum RuntimeError: LocalizedError {
         case unsupportedHost, missingMetadata(String), invalidMetadata(String), noVM, busy, incompleteInstallation, unsafeDestination
         var errorDescription: String? {
@@ -28,12 +28,34 @@ final class VMRuntimeService {
     var onExternalStateChange: ((String) -> Void)?
     var hasSession: Bool { virtualMachine != nil || qemu.isRunning }
     var usesExternalConsole: Bool { qemu.isRunning }
+    var externalConsoleProcessID: Int32? { qemu.processIdentifier }
 
-    init() {
+    override init() {
+        super.init()
         qemu.onExit = { [weak self] status in
             self?.currentFolder = nil
             self?.onExternalStateChange?(status)
         }
+    }
+
+    func guestDidStop(_ virtualMachine: VZVirtualMachine) {
+        completeNativeSession(virtualMachine, message: "Guest shut down; disk images released")
+    }
+
+    func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: Error) {
+        completeNativeSession(virtualMachine, message: "Guest stopped with an error: \(error.localizedDescription)")
+    }
+
+    private func completeNativeSession(_ ended: VZVirtualMachine, message: String) {
+        guard virtualMachine === ended, installer == nil, !operationInProgress else { return }
+        virtualMachine = nil; physicalDiskLease = nil; currentFolder = nil; imageLeases = []
+        onExternalStateChange?(message)
+    }
+
+    func requestShutdown() throws {
+        if qemu.isRunning { try qemu.requestShutdown(); return }
+        guard let virtualMachine, virtualMachine.canRequestStop else { throw RuntimeError.noVM }
+        try virtualMachine.requestStop()
     }
 
     func startExistingVM(at folder: URL, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
@@ -61,6 +83,7 @@ final class VMRuntimeService {
         }
         let config = try makeConfiguration(folder: folder, hardware: hardware, readOnlyDisk: readOnlyDisk)
         let vm = VZVirtualMachine(configuration: config)
+        vm.delegate = self
         virtualMachine = vm
         physicalDiskLease = readOnlyDisk
         currentFolder = folder
@@ -87,6 +110,9 @@ final class VMRuntimeService {
     }
 
     func stop() async throws {
+        guard !operationInProgress else { throw RuntimeError.busy }
+        operationInProgress = true
+        defer { operationInProgress = false }
         if qemu.isRunning {
             try await qemu.stop()
             currentFolder = nil
@@ -272,6 +298,7 @@ final class VMRuntimeService {
         do {
             try VMHardwareStore.save(hardware, to: folder)
             try VMConnectivityStore.save(connectivity, to: folder)
+            if connectivity.guestToolsEnabled { try HostGuestExchange.createIfNeeded(in: folder) }
             if suppliedDisk == nil { try VMDiskImageStore.create(at: folder.appendingPathComponent("disk.img"), sizeGiB: diskSizeGiB) }
             if guestOS == .linuxARM {
                 try VZGenericMachineIdentifier().dataRepresentation.write(to: folder.appendingPathComponent("machine-id.bin"), options: .atomic)

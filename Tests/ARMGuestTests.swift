@@ -22,6 +22,9 @@ struct ARMGuestTests {
         try Data(repeating: 0, count: 4096).write(to: iso)
         rejects({ try VMGuestMedia.verifyISO(scratch.appendingPathComponent("missing.iso")) }, "missing ISO")
         rejects({ try VMGuestMedia.verifyISO(scratch) }, "directory is not an ISO")
+        let malformedISO = scratch.appendingPathComponent("misaligned.iso")
+        try Data(repeating: 0, count: 513).write(to: malformedISO)
+        rejects({ try VMGuestMedia.verifyISO(malformedISO) }, "misaligned ISO rejected before provisioning")
         let legacy = ManagedVMManifest(version: 2, id: UUID(), createdAt: Date(), diskSizeGiB: 64, state: .installed, lastFailure: nil)
         var legacyObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(legacy)) as! [String: Any]
         legacyObject.removeValue(forKey: "guestOS")
@@ -54,7 +57,18 @@ struct ARMGuestTests {
         try VMRegistry.write(installedLinux, at: linux)
         try await runtime.startExistingVM(at: linux)
         check(runtime.virtualMachine?.state == .running, "installed Linux boots after installer media is removed")
-        try await runtime.stop()
+        // Exercise the framework callback from a stopped guest, rather than runtime.stop().
+        do {
+            let stoppedGuest = runtime.virtualMachine!
+            try await stoppedGuest.stop()
+            runtime.guestDidStop(stoppedGuest)
+            check(!runtime.hasSession, "native stop callback releases session automatically")
+            let nativeLease = try VMDiskImageLease(url: hardware.bootDiskURL(in: linux))
+            check(nativeLease.info.sizeGiB == 64, "native callback releases image lock")
+            withExtendedLifetime(nativeLease) {}
+        }
+        let nativeGrown = try VMDiskImageStore.grow(at: hardware.bootDiskURL(in: linux), toGiB: 80)
+        check(nativeGrown.sizeGiB == 80, "native shutdown allows disk mutation after attachment release")
         let tools = try VMQEMUSettings.discover()
         let windows = scratch.appendingPathComponent("Windows with spaces,comma")
         try runtime.createARMGuest(at: windows, guestOS: .windowsARM, installationMediaURL: iso, diskSizeGiB: 64,
@@ -72,6 +86,7 @@ struct ARMGuestTests {
         check(args.contains("Windows with spaces,,comma"), "QEMU name escapes commas")
         check(args.contains(where: { $0.contains("highmem=on") }), "Windows supports four or more GiB of RAM")
         check(args.contains("tpm-tis-device,tpmdev=tpm0"), "TPM 2.0 device")
+        check(args.contains("cpus=2,sockets=1,cores=2,threads=1"), "explicit single-socket Windows topology")
         check(args.contains("nvme,drive=bootdisk,serial=VolumeBootMain,bootindex=1"), "Windows inbox NVMe disk")
         check(args.contains(where: { $0.contains("drive=installer") }), "install media attached")
         let blocks = args.enumerated().compactMap { index, value -> [String: Any]? in
@@ -89,6 +104,8 @@ struct ARMGuestTests {
         try await service.start(folder: windows, record: windowsRecord, hardware: hardware, connectivity: .default,
             leases: [try VMDiskImageLease(url: bootURL, writable: true), try VMDiskImageLease(url: secondary)], accelerator: "tcg", display: "none")
         check(service.isRunning, "live QEMU and TPM startup")
+        try service.requestShutdown()
+        check(service.isRunning, "graceful QMP request leaves firmware session under guest control")
         rejects({ try VMDiskImageStore.grow(at: bootURL, toGiB: 80) }, "live Windows session locks its disk")
         try await service.stop()
         check(!service.isRunning, "QMP stop cleans session")
