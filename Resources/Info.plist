@@ -17,6 +17,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>MacOnMac` can provide the host microphone to a macOS virtual machine when microphone input is enabled for that VM.</string>
+	<string>MacOnMac can provide the host microphone to a macOS virtual machine when microphone input is enabled for that VM.</string>
 </dict>
 </plist>

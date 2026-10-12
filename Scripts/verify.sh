@@ -15,6 +15,7 @@ python3 Tests/ProjectStructureTests.py
 ./Scripts/test-workspace-lease.sh
 ./Scripts/test-update-rollback.sh
 ./Scripts/test-daemon-lifecycle.sh
+./Scripts/check-source-manifest.sh
 ./Scripts/test-arm-guests.sh
 ./Scripts/test-guest-host-e2e.sh
 ./Scripts/test-guest-tools-v2.sh
