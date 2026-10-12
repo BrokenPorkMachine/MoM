@@ -14,7 +14,7 @@ struct VMDiskImageInfo {
 }
 
 enum VMDiskImageError: LocalizedError {
-    case invalidPath, invalidImage, invalidSize, alreadyExists, inUse, shrinkUnsupported, multipleLinks
+    case invalidPath, invalidImage, invalidSize, alreadyExists, inUse, shrinkUnsupported, multipleLinks, insufficientSpace
     var errorDescription: String? {
         switch self {
         case .invalidPath: return "Choose a local .img or .raw file outside /dev. Symbolic links are not supported."
@@ -24,6 +24,7 @@ enum VMDiskImageError: LocalizedError {
         case .inUse: return "This disk image is in use. Stop every VM using it before changing it."
         case .shrinkUnsupported: return "Choose a larger capacity. Shrinking an image can destroy partitions and is not supported."
         case .multipleLinks: return "This image has multiple hard links. Use an independent copy before modifying it."
+        case .insufficientSpace: return "The selected volume does not have enough headroom for this disk image operation."
         }
     }
 }
@@ -123,6 +124,7 @@ enum VMDiskImageStore {
     static func create(at url: URL, sizeGiB: Int) throws -> VMDiskImageInfo {
         let checked = try checkedURL(url)
         let bytes = try capacityBytes(sizeGiB)
+        try requireHeadroom(for: checked, additionalBytes: bytes)
         let descriptor = open(checked.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode_t(0o600))
         guard descriptor >= 0 else {
             if errno == EEXIST { throw VMDiskImageError.alreadyExists }
@@ -145,6 +147,7 @@ enum VMDiskImageStore {
         let lease = try VMDiskImageLease(url: url, writable: true)
         guard flock(lease.descriptor, LOCK_EX | LOCK_NB) == 0 else { throw VMDiskImageError.inUse }
         guard bytes > lease.info.sizeBytes else { throw VMDiskImageError.shrinkUnsupported }
+        try requireHeadroom(for: lease.info.url, additionalBytes: bytes - lease.info.sizeBytes)
         try verifyUnchangedPath(lease.descriptor, url: lease.info.url)
         guard ftruncate(lease.descriptor, off_t(bytes)) == 0, fsync(lease.descriptor) == 0 else { throw posixError() }
         return try inspect(lease.descriptor, url: lease.info.url)
@@ -166,6 +169,15 @@ enum VMDiskImageStore {
         guard opened.st_dev == named.st_dev, opened.st_ino == named.st_ino,
               named.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { throw VMDiskImageError.invalidPath }
         guard opened.st_nlink == 1 else { throw VMDiskImageError.multipleLinks }
+    }
+
+    private static func requireHeadroom(for url: URL, additionalBytes: UInt64) throws {
+        let volume = url.deletingLastPathComponent()
+        if ProcessInfo.processInfo.environment["MACONMAC_ALLOW_LOW_SPACE_TEST"] != "1",
+           let available = try volume.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage,
+           available < Int64(min(UInt64(Int64.max), additionalBytes > 0 ? 1 * 1024 * 1024 : 0)) {
+            throw VMDiskImageError.insufficientSpace
+        }
     }
 
     static func posixError() -> NSError { NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }

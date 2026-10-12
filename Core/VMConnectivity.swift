@@ -36,7 +36,7 @@ enum VMConnectivityError: Error, LocalizedError, Equatable {
         case .shareOverlapsVM: return "Shared folder cannot be the VM bundle, contain it, or be contained by it"
         case .shareInDeviceTree: return "Raw device paths cannot be shared"
         case .unsupportedVersion: return "Unrecognized connectivity settings version"
-        case .policyDenied(let setting): return "An administrator policy disallows (setting)."
+        case .policyDenied(let setting): return "An administrator policy disallows \(setting)."
         }
     }
 }
