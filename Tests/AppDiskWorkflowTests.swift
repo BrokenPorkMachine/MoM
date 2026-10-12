@@ -49,10 +49,29 @@ struct AppDiskWorkflowTests {
         check(fm.fileExists(atPath: restored.appendingPathComponent("efi-vars.bin").path) && fm.fileExists(atPath: restored.appendingPathComponent("tpm/state.bin").path), "backup preserves firmware and TPM state")
         check(restoredHardware.additionalDisks.count == 1 && fm.fileExists(atPath: restoredHardware.additionalDisks[0].path), "restore recreates external disk images")
         check(restoredHardware.additionalDisks[0].path != storage.path, "restore rewrites external disk paths")
+        var transactionHardware = restoredHardware
+        transactionHardware.displayName = "transactional update"
+        var transactionConnectivity = try VMConnectivityStore.load(from: restored)
+        transactionConnectivity.guestToolsEnabled = true
+        try VMWorkspaceTransaction.commit(at: restored, manifest: try VMRegistry.read(at: restored),
+            hardware: transactionHardware, connectivity: transactionConnectivity)
+        let coordinatedHardware = try VMHardwareStore.load(from: restored)
+        let coordinatedConnectivity = try VMConnectivityStore.load(from: restored)
+        check(coordinatedHardware.displayName == "transactional update" && coordinatedConnectivity.guestToolsEnabled,
+              "coordinated workspace update commits all profiles")
+        let previousBackupHardware = try Data(contentsOf: restored.appendingPathComponent(VMHardwareStore.filename))
+        let interrupted: [String: Any] = ["phase": "prepared", "files": [["name": VMHardwareStore.filename, "previous": previousBackupHardware.base64EncodedString()]]]
+        try JSONSerialization.data(withJSONObject: interrupted).write(to: restored.appendingPathComponent(".workspace-transaction.json"), options: .atomic)
+        transactionHardware.displayName = "interrupted update"
+        try VMHardwareStore.save(transactionHardware, to: restored)
+        _ = try VMRegistry.read(at: restored)
+        let recoveredHardware = try VMHardwareStore.load(from: restored)
+        check(recoveredHardware.displayName == "transactional update" &&
+              !fm.fileExists(atPath: restored.appendingPathComponent(".workspace-transaction.json").path), "interrupted workspace update recovers previous generation")
         let previousFolder = model.vmFolderPath
-        let previousHardware = model.hardware
+        let previousModelHardware = model.hardware
         model.loadHardwareProfile(for: scratch.appendingPathComponent("does-not-exist"))
-        check(model.vmFolderPath == previousFolder && model.hardware == previousHardware, "failed profile load preserves current selection")
+        check(model.vmFolderPath == previousFolder && model.hardware == previousModelHardware, "failed profile load preserves current selection")
         let invalid = scratch.appendingPathComponent("Broken profile")
         try fm.createDirectory(at: invalid, withIntermediateDirectories: false)
         let invalidRecord = try VMRegistry.read(at: bundle)
@@ -62,7 +81,7 @@ struct AppDiskWorkflowTests {
         try VMHardwareStore.save(differentHardware, to: invalid)
         try Data("invalid JSON".utf8).write(to: invalid.appendingPathComponent("connectivity.json"))
         model.loadHardwareProfile(for: invalid)
-        check(model.vmFolderPath == previousFolder && model.hardware == previousHardware, "connectivity load failure cannot partially replace selection")
+        check(model.vmFolderPath == previousFolder && model.hardware == previousModelHardware, "connectivity load failure cannot partially replace selection")
         let futureRecord = ManagedVMManifest(version: 99, id: UUID(), createdAt: Date(), diskSizeGiB: 64,
             state: .installed, lastFailure: nil)
         try VMRegistry.write(futureRecord, at: invalid)

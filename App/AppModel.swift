@@ -205,7 +205,8 @@ final class AppModel: ObservableObject {
             try VMHardwarePolicy.verify(hardware, vmFolder: folder,
                 cpuRange: 2...maximumCPUCount,
                 maximumMemoryGiB: safeMaximumMemoryGiB)
-            try VMHardwareStore.save(hardware, to: folder)
+            let record = try VMRegistry.read(at: folder)
+            try VMWorkspaceTransaction.commit(at: folder, manifest: record, hardware: hardware, connectivity: connectivity)
             savedHardware = hardware
             hardwareStatus = "Saved · changes apply the next time this VM starts"
         } catch { hardwareStatus = "Save rejected: \(error.localizedDescription)" }
@@ -655,7 +656,8 @@ final class AppModel: ObservableObject {
                 record.driverMediaPath = drivers?.path
             }
             record.installationMediaPath = installer?.path
-            try VMRegistry.write(record, at: folder)
+            try VMWorkspaceTransaction.commit(at: folder, manifest: record,
+                hardware: try VMHardwareStore.load(from: folder), connectivity: try VMConnectivityStore.load(from: folder))
             selectedManifest = record
             refreshManagedVMs()
             vmStatus = "Saved ARM media and executable paths for the next boot"
@@ -682,7 +684,8 @@ final class AppModel: ObservableObject {
             var saved = try VMHardwareStore.load(from: folder)
             saved.bootDiskPath = next.bootDiskPath
             saved.additionalDisks = next.additionalDisks
-            try VMHardwareStore.save(saved, to: folder)
+            try VMWorkspaceTransaction.commit(at: folder, manifest: try VMRegistry.read(at: folder),
+                hardware: saved, connectivity: try VMConnectivityStore.load(from: folder))
             savedHardware = saved
         }
         hardware = next

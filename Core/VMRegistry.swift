@@ -43,6 +43,7 @@ struct ManagedVMManifest: Codable, Identifiable {
 
 enum VMRegistry {
     static func read(at folder: URL) throws -> ManagedVMManifest {
+        try VMWorkspaceTransaction.recover(at: folder)
         let record = try JSONDecoder().decode(ManagedVMManifest.self, from: Data(contentsOf: folder.appendingPathComponent("manifest.json")))
         guard (1...3).contains(record.version), (64...2048).contains(record.diskSizeGiB) else {
             throw NSError(domain: "VolumeBoot.Registry", code: 1, userInfo: [NSLocalizedDescriptionKey:
@@ -51,9 +52,7 @@ enum VMRegistry {
         return record
     }
     static func write(_ manifest: ManagedVMManifest, at folder: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(manifest).write(to: folder.appendingPathComponent("manifest.json"), options: .atomic)
+        try VMWorkspaceTransaction.commit(at: folder, manifest: manifest)
     }
     /// Enumerates only immediate child bundles of a user-selected parent directory.
     static func discover(in directory: URL) -> [(url: URL, record: ManagedVMManifest)] {
@@ -65,6 +64,60 @@ enum VMRegistry {
         }.sorted { $0.record.createdAt > $1.record.createdAt }
     }
 }
+
+/// Journals coordinated VM metadata updates so a process interruption cannot
+/// leave manifest, hardware, and connectivity files at mixed generations.
+enum VMWorkspaceTransaction {
+    private static let journalName = ".workspace-transaction.json"
+
+    private struct Journal: Codable {
+        var phase: String
+        let files: [File]
+        struct File: Codable { let name: String; let previous: Data? }
+    }
+
+    static func commit(at folder: URL, manifest: ManagedVMManifest? = nil,
+                       hardware: VMHardwareSettings? = nil,
+                       connectivity: VMConnectivitySettings? = nil) throws {
+        try recover(at: folder)
+        var replacements: [(String, Data)] = []
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let manifest { replacements.append((VMRegistryManifestFilename, try encoder.encode(manifest))) }
+        if let hardware { replacements.append((VMHardwareStore.filename, try encoder.encode(hardware))) }
+        if let connectivity { replacements.append((VMConnectivityStore.filename, try encoder.encode(connectivity))) }
+        guard !replacements.isEmpty else { return }
+        let fm = FileManager.default
+        let files = replacements.map { item in
+            Journal.File(name: item.0, previous: try? Data(contentsOf: folder.appendingPathComponent(item.0)))
+        }
+        let journalURL = folder.appendingPathComponent(journalName)
+        try writeJournal(Journal(phase: "prepared", files: files), to: journalURL)
+        for (name, data) in replacements { try data.write(to: folder.appendingPathComponent(name), options: .atomic) }
+        try writeJournal(Journal(phase: "committed", files: files), to: journalURL)
+        try fm.removeItem(at: journalURL)
+    }
+
+    static func recover(at folder: URL) throws {
+        let journalURL = folder.appendingPathComponent(journalName)
+        guard FileManager.default.fileExists(atPath: journalURL.path) else { return }
+        let journal = try JSONDecoder().decode(Journal.self, from: Data(contentsOf: journalURL))
+        if journal.phase == "prepared" {
+            for file in journal.files {
+                let url = folder.appendingPathComponent(file.name)
+                if let previous = file.previous { try previous.write(to: url, options: .atomic) }
+                else if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            }
+        }
+        try FileManager.default.removeItem(at: journalURL)
+    }
+
+    private static func writeJournal(_ journal: Journal, to url: URL) throws {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(journal).write(to: url, options: .atomic)
+    }
+}
+
+private let VMRegistryManifestFilename = "manifest.json"
 
 enum VMBackupError: LocalizedError {
     case invalidBackup, backupExists, destinationExists, unsupportedVersion
