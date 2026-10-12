@@ -124,6 +124,20 @@ enum VBPairing {
         try store(key, to: path)
         return key
     }
+    /// Replaces the host pairing secret without exposing the old secret. The
+    /// guest agent must be restarted (or reloaded) after rotation.
+    static func rotateHostKey(_ vmFolder: URL) throws -> Data {
+        let path = hostKeyPath(vmFolder)
+        let replacement = try secureRandomKey()
+        try FileManager.default.removeItem(at: path)
+        do {
+            try store(replacement, to: path)
+            return replacement
+        } catch {
+            try? FileManager.default.removeItem(at: path)
+            throw error
+        }
+    }
     static func store(_ key: Data, to path: URL) throws {
         guard key.count == 32 else { throw VBToolsError.invalidKey }
         try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)

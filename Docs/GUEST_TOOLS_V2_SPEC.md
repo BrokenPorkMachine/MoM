@@ -90,3 +90,6 @@ The installer is per-user only, does not use sudo, adds no login item to the hos
 - `Scripts/install-guest-agent.sh`: guest user LaunchAgent deployment.
 - `App/AppModel.swift`, `App/DashboardView.swift`: main UI integrations.
 - `Tests/GuestToolsProtocolTests.swift`, `Scripts/test-guest-tools-v2.sh`, `Scripts/test-guest-host-e2e.sh`: regression tests.
+## Pairing-key rotation
+
+The host CLI supports `pair-rotate <vm-folder>`. Rotation replaces the owner-only host key atomically, never prints the old key, and invalidates queued/authenticated messages made with it. Restart or reload the guest agent before sending new requests, then provide the new key through the existing trusted manual pairing flow. Pairing keys are excluded from diagnostics, VM exports, and guest-visible exchange data.

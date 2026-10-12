@@ -9,7 +9,7 @@ struct VBHostCLI {
     static func main() throws {
         let args = Array(CommandLine.arguments.dropFirst())
         guard args.count >= 2 else {
-            print("Usage: volumeboot-host <vm-folder> status | diagnose | inbox | send <text> | push <file> | guest-files | receive <transfer-id> <folder> | pair-init | pair-code | ping | request-status | replies | clipboard-send [text] | clipboard-peek | clipboard-import")
+            print("Usage: volumeboot-host <vm-folder> status | diagnose | inbox | send <text> | push <file> | guest-files | receive <transfer-id> <folder> | pair-init | pair-rotate | pair-code | ping | request-status | replies | clipboard-send [text] | clipboard-peek | clipboard-import")
             return
         }
         let folder = URL(fileURLWithPath: args[0], isDirectory: true)
@@ -58,8 +58,11 @@ struct VBHostCLI {
             let saved = try VBGuestToolsTransport.receiveTransfer(id: id, origin: "guest", root: root, key: key,
                 destination: URL(fileURLWithPath: args[3], isDirectory: true))
             print("Verified and saved \(saved.lastPathComponent)")
-        case "pair-init", "pair-code":
-            let key = action == "pair-init" ? try VBPairing.createHostKey(folder) : try VBPairing.load(VBPairing.hostKeyPath(folder))
+        case "pair-init", "pair-rotate", "pair-code":
+            let key: Data
+            if action == "pair-init" { key = try VBPairing.createHostKey(folder) }
+            else if action == "pair-rotate" { key = try VBPairing.rotateHostKey(folder) }
+            else { key = try VBPairing.load(VBPairing.hostKeyPath(folder)) }
             print("Pairing key (sensitive; enter manually inside trusted guest): \(VBSHA256.hex(Array(key)))")
         case "ping", "request-status":
             let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
