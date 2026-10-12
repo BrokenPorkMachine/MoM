@@ -10,6 +10,8 @@ Administrators should follow the [managed update and rollback contract](Docs/UPD
 
 See the [current product scope](Docs/PRODUCT_SCOPE.md), [dependency and licensing record](Docs/DEPENDENCIES_AND_LICENSES.md), and [support commitments](Docs/SUPPORT_AND_MAINTENANCE.md) before enterprise deployment.
 
+Use the [current release guide](Docs/RELEASE_GUIDE.md) for installation, administration, troubleshooting, and recovery. Files named `RELEASE_v*.md` are historical notes only.
+
 **Virtual machines → Disks** creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable installation/boot images. **Console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default) for macOS/Linux. Windows uses QEMU’s console and Control + Option + G. See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md).
 
 Run `Scripts/test-disk-images.sh` and `Scripts/test-arm-guests.sh` for disk workflows and native Linux/QEMU startup/shutdown checks. The latter requires macOS, QEMU, and swtpm; its synthetic ISO tests configuration and EFI/backend startup, not OS installation. Full OS installation and interactive console checks require your own compatible installer media.
