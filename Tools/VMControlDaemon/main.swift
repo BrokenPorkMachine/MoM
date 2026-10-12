@@ -59,12 +59,15 @@ final class VMControlService: NSObject, MacOnMacVMControlProtocol {
 
 final class VMControlListener: NSObject, NSXPCListenerDelegate {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        // This is a per-user launch-agent Mach service. It never runs as root;
+        // cross-user access is excluded by the user's bootstrap namespace.
         connection.exportedInterface = NSXPCInterface(with: MacOnMacVMControlProtocol.self)
         connection.exportedObject = VMControlService()
         connection.invalidationHandler = { connection.invalidationHandler = nil }
         connection.resume()
         return true
     }
+
 }
 
 let listener = NSXPCListener.service()
