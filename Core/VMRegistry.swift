@@ -79,6 +79,8 @@ enum VMWorkspaceTransaction {
     static func commit(at folder: URL, manifest: ManagedVMManifest? = nil,
                        hardware: VMHardwareSettings? = nil,
                        connectivity: VMConnectivitySettings? = nil) throws {
+        let lease = try VMWorkspaceLease(folder: folder)
+        defer { withExtendedLifetime(lease) {} }
         try recover(at: folder)
         var replacements: [(String, Data)] = []
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -156,6 +158,8 @@ enum VMBackupService {
     private static let externalName = "external-disks"
 
     static func create(from folder: URL, to backup: URL) throws {
+        let lease = try VMWorkspaceLease(folder: folder)
+        defer { withExtendedLifetime(lease) {} }
         guard !FileManager.default.fileExists(atPath: backup.path) else { throw VMBackupError.backupExists }
         let manifest = try VMRegistry.read(at: folder)
         let hardware = try VMHardwareStore.load(from: folder)
@@ -169,6 +173,7 @@ enum VMBackupService {
         try fm.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let workspace = staging.appendingPathComponent(workspaceName)
         try fm.copyItem(at: root, to: workspace)
+        try? fm.removeItem(at: workspace.appendingPathComponent(VMWorkspaceLease.filename))
 
         var external: [VMBackupDescriptor.ExternalDisk] = []
         var externalURLs: [URL] = []

@@ -21,6 +21,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
     private(set) var installer: VZMacOSInstaller?
     var installationProgress: Double { installer?.progress.fractionCompleted ?? 0 }
     private(set) var currentFolder: URL?
+    private var workspaceLease: VMWorkspaceLease?
     private var imageLeases: [VMDiskImageLease] = []
     private(set) var operationInProgress = false
     private let qemu = VMQEMUService()
@@ -33,6 +34,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         super.init()
         qemu.onExit = { [weak self] status in
             self?.currentFolder = nil
+            self?.workspaceLease = nil
             self?.onExternalStateChange?(status)
         }
     }
@@ -47,7 +49,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
 
     private func completeNativeSession(_ ended: VZVirtualMachine, message: String) {
         guard virtualMachine === ended, installer == nil, !operationInProgress else { return }
-        virtualMachine = nil; currentFolder = nil; imageLeases = []
+        virtualMachine = nil; currentFolder = nil; imageLeases = []; workspaceLease = nil
         onExternalStateChange?(message)
     }
 
@@ -62,6 +64,10 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
         defer { operationInProgress = false }
+        let lease = try VMWorkspaceLease(folder: folder)
+        workspaceLease = lease
+        var keepLease = false
+        defer { if !keepLease { workspaceLease = nil } }
         let manifest = try VMRegistry.read(at: folder)
         guard manifest.state == .installed || (manifest.guestOS != .macOS && manifest.state == .installing) else {
             throw RuntimeError.incompleteInstallation
@@ -76,7 +82,8 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         if manifest.guestOS == .windowsARM {
             currentFolder = folder
             do { try await qemu.start(folder: folder, record: manifest, hardware: hardware, connectivity: connectivity, leases: leases) }
-            catch { currentFolder = nil; throw error }
+            catch { currentFolder = nil; workspaceLease = nil; throw error }
+            keepLease = true
             return
         }
         let config = try makeConfiguration(folder: folder, hardware: hardware)
@@ -86,8 +93,9 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         currentFolder = folder
         imageLeases = leases
         do { try await vm.start() } catch {
-            virtualMachine = nil; currentFolder = nil; imageLeases = []; throw error
+            virtualMachine = nil; currentFolder = nil; imageLeases = []; workspaceLease = nil; throw error
         }
+        keepLease = true
         #else
         throw RuntimeError.unsupportedHost
         #endif
@@ -102,6 +110,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         virtualMachine = nil
         currentFolder = nil
         imageLeases = []
+        workspaceLease = nil
         return true
     }
 
@@ -112,6 +121,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         if qemu.isRunning {
             try await qemu.stop()
             currentFolder = nil
+            workspaceLease = nil
             return
         }
         guard let virtualMachine else { throw RuntimeError.noVM }
@@ -119,6 +129,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         self.virtualMachine = nil
         currentFolder = nil
         imageLeases = []
+        workspaceLease = nil
     }
     #if arch(arm64)
     private func lockImages(folder: URL, hardware: VMHardwareSettings) throws -> [VMDiskImageLease] {
@@ -284,6 +295,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         }
         let suppliedDisk = try hardware.bootDiskPath.map { try VMDiskImageLease(url: URL(fileURLWithPath: $0), writable: true) }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let workspaceLease = try VMWorkspaceLease(folder: folder)
         var manifest = ManagedVMManifest(version: 3, id: UUID(), createdAt: Date(),
             diskSizeGiB: suppliedDisk.map { Int($0.info.sizeBytes / VMDiskImageStore.gibibyte) } ?? diskSizeGiB,
             state: .provisioning, lastFailure: nil, guestOS: guestOS, installationMediaPath: installationMediaURL.path,
@@ -309,6 +321,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
             try? VMRegistry.write(manifest, at: folder)
             throw error
         }
+        withExtendedLifetime(workspaceLease) {}
         #else
         throw RuntimeError.unsupportedHost
         #endif
@@ -316,6 +329,8 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
 
     func finishARMInstallation(at folder: URL) throws {
         guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
+        let workspaceLease = try VMWorkspaceLease(folder: folder)
+        defer { withExtendedLifetime(workspaceLease) {} }
         var manifest = try VMRegistry.read(at: folder)
         guard manifest.guestOS != .macOS, manifest.state == .installing else { throw VMGuestError.invalidState }
         let hardware = try VMHardwareStore.load(from: folder)
@@ -362,6 +377,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         }
         // Exclusive creation: never adopt or overwrite an existing folder.
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let workspaceLease = try VMWorkspaceLease(folder: folder)
         let capacity = suppliedDisk.map { Int($0.info.sizeBytes / VMDiskImageStore.gibibyte) } ?? diskSizeGiB
         var manifest = ManagedVMManifest(version: 2, id: UUID(), createdAt: Date(), diskSizeGiB: capacity, state: .provisioning, lastFailure: nil)
         try VMRegistry.write(manifest, at: folder)
@@ -406,6 +422,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
             try? VMRegistry.write(manifest, at: folder)
             throw error
         }
+        withExtendedLifetime(workspaceLease) {}
         #else
         throw RuntimeError.unsupportedHost
         #endif

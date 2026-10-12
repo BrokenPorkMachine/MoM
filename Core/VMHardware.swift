@@ -1,4 +1,76 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
+
+enum VMWorkspaceLeaseError: LocalizedError {
+    case invalidWorkspace, inUse, cannotOpen
+    var errorDescription: String? {
+        switch self {
+        case .invalidWorkspace: return "The VM workspace is not a safe directory."
+        case .inUse: return "This VM workspace is already in use by another process."
+        case .cannotOpen: return "The VM workspace could not be opened for exclusive use."
+        }
+    }
+}
+
+/// Cross-process lease for every mutable file in a VM bundle. `flock` releases
+/// ownership automatically when the process exits, so a crashed owner does
+/// not leave a permanently stale lease file behind.
+final class VMWorkspaceLease {
+    static let filename = ".workspace.lock"
+    private static let mutex = NSLock()
+    private static var active: [String: (descriptor: Int32, count: Int)] = [:]
+    let folder: URL
+    private let key: String
+    private let descriptor: Int32
+
+    init(folder: URL) throws {
+        let resolved = folder.standardizedFileURL.resolvingSymlinksInPath()
+        guard resolved.path != "/", resolved.path != "/dev", !resolved.path.hasPrefix("/dev/"),
+              (try? resolved.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            throw VMWorkspaceLeaseError.invalidWorkspace
+        }
+        self.folder = resolved
+        self.key = resolved.path
+        Self.mutex.lock()
+        if let existing = Self.active[key] {
+            Self.active[key] = (existing.descriptor, existing.count + 1)
+            self.descriptor = existing.descriptor
+            Self.mutex.unlock()
+            return
+        }
+        let path = resolved.appendingPathComponent(Self.filename).path
+        let fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, mode_t(0o600))
+        guard fd >= 0 else { Self.mutex.unlock(); throw VMWorkspaceLeaseError.cannotOpen }
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
+              info.st_uid == getuid(), (info.st_mode & 0o077) == 0 else {
+            close(fd); Self.mutex.unlock(); throw VMWorkspaceLeaseError.invalidWorkspace
+        }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
+            close(fd); Self.mutex.unlock(); throw VMWorkspaceLeaseError.inUse
+        }
+        Self.active[key] = (fd, 1)
+        self.descriptor = fd
+        Self.mutex.unlock()
+    }
+
+    deinit {
+        Self.mutex.lock()
+        guard let existing = Self.active[key] else { Self.mutex.unlock(); return }
+        if existing.count > 1 {
+            Self.active[key] = (existing.descriptor, existing.count - 1)
+        } else {
+            Self.active.removeValue(forKey: key)
+            flock(existing.descriptor, LOCK_UN)
+            close(existing.descriptor)
+        }
+        Self.mutex.unlock()
+    }
+}
 
 enum VMDisplayPreset: String, Codable, CaseIterable, Identifiable {
     case compact, fullHD, retina, wide
@@ -185,6 +257,8 @@ enum VMHardwareStore {
         return try JSONDecoder().decode(VMHardwareSettings.self, from: Data(contentsOf: file))
     }
     static func save(_ settings: VMHardwareSettings, to folder: URL) throws {
+        let lease = try VMWorkspaceLease(folder: folder)
+        defer { withExtendedLifetime(lease) {} }
         let resolved = folder.standardizedFileURL.resolvingSymlinksInPath()
         guard resolved.path != "/dev", !resolved.path.hasPrefix("/dev/"),
               (try? resolved.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
