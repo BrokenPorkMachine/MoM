@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published var selectedDeviceID: String?
     @Published var vmFolderPath = ""
     @Published var restoreImagePath = ""
+    @Published var macOSInstallerVersion = ""
     @Published var guestOS: VMGuestOS = .macOS
     @Published var installationISOPath = ""
     @Published var windowsDriverISOPath = ""
@@ -82,6 +83,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var authenticatedStatus = "Guest not paired"
     @Published private(set) var networkHealth = "Select a VM and check its profile"
     @Published private(set) var clipboardStatus = "Manual text clipboard only; no automatic sync"
+    @Published private(set) var mediaDownloadInProgress = false
+    @Published private(set) var mediaDownloadStatus = ""
+    @Published private(set) var osDownloads: [OSMediaDownloadRecord] = []
+    private let mediaDownloader = OSMediaDownloader()
 
     init(preferences: (any VMPreferences)? = nil) {
         self.preferences = preferences
@@ -98,6 +103,66 @@ final class AppModel: ObservableObject {
            (try? VMRegistry.read(at: URL(fileURLWithPath: path))) != nil {
             loadHardwareProfile(for: URL(fileURLWithPath: path))
         }
+    }
+
+    func downloadLatestMacOSRestoreImage(to destination: URL) {
+        guard !mediaDownloadInProgress else { return }
+        mediaDownloadInProgress = true
+        mediaDownloadStatus = "Finding the latest Apple restore image…"
+        let recordID = UUID()
+        osDownloads.insert(OSMediaDownloadRecord(id: recordID, title: "Latest macOS restore image", destination: destination,
+                                                   progress: 0, state: .downloading, detail: destination.path), at: 0)
+        mediaDownloader.downloadLatestMacOSRestoreImage(to: destination, progress: { [weak self] value in
+            guard let self else { return }
+            if let index = self.osDownloads.firstIndex(where: { $0.id == recordID }) { self.osDownloads[index].progress = value }
+            self.mediaDownloadStatus = "Downloading Apple restore image… \(Int(value * 100))%"
+        }) { [weak self] result in
+            guard let self else { return }
+            self.mediaDownloadInProgress = false
+            switch result {
+            case .success(let url):
+                self.restoreImagePath = url.path
+                self.mediaDownloadStatus = "Downloaded Apple restore image."
+                self.updateDownload(recordID, state: .completed, detail: url.path, progress: 1)
+            case .failure(let error):
+                self.mediaDownloadStatus = "Download failed: \(error.localizedDescription)"
+                self.updateDownload(recordID, state: error is CancellationError ? .cancelled : .failed,
+                                    detail: error.localizedDescription, progress: 0)
+            }
+        }
+    }
+
+    private func updateDownload(_ id: UUID, state: OSMediaDownloadRecord.State, detail: String, progress: Double) {
+        guard let index = osDownloads.firstIndex(where: { $0.id == id }) else { return }
+        osDownloads[index].state = state
+        osDownloads[index].detail = detail
+        osDownloads[index].progress = progress
+    }
+
+    func cancelMediaDownload() {
+        mediaDownloader.cancel()
+        mediaDownloadInProgress = false
+        mediaDownloadStatus = "Download cancelled."
+    }
+
+    func openTerminalForMacOSInstallerList() {
+        runTerminalCommand("softwareupdate --list-full-installers")
+    }
+
+    func openTerminalForMacOSInstallerDownload() {
+        let version = macOSInstallerVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard version.range(of: #"^\d+(\.\d+){1,2}$"#, options: .regularExpression) != nil else {
+            mediaDownloadStatus = "Enter a macOS version such as 26.6.2 before opening Terminal."
+            return
+        }
+        runTerminalCommand("softwareupdate --fetch-full-installer --full-installer-version \(version)")
+        mediaDownloadStatus = "Terminal opened. macOS will download the installer to Applications."
+    }
+
+    private func runTerminalCommand(_ command: String) {
+        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"Terminal\" to do script \"\(escaped)\""
+        NSAppleScript(source: script)?.executeAndReturnError(nil)
     }
 
     var currentManifest: ManagedVMManifest? { loadedFolderPath == vmFolderPath ? selectedManifest : nil }

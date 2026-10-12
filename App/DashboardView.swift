@@ -31,6 +31,7 @@ struct DashboardView: View {
                         sidebarGroup("Host storage") {
                             sidebarItem("Storage inventory", symbol: "externaldrive", tab: 0)
                             sidebarItem("macOS installations", symbol: "internaldrive", tab: 3)
+                            sidebarItem("OS Library", symbol: "square.stack.3d.up", tab: 5)
                         }
                         sidebarGroup("Advanced") { sidebarItem("Research", symbol: "testtube.2", tab: 2) }
                     }.padding(.horizontal, 12).padding(.vertical, 16)
@@ -48,6 +49,7 @@ struct DashboardView: View {
                 switch selectedTab {
                 case 1: managedVM
                 case 3: installationsView
+                case 5: OSLibraryView()
                 case 4: connectivityView
                 case 2: research
                 default: ScrollView { inventory }

@@ -260,10 +260,28 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
         VStack(alignment: .leading, spacing: 14) {
             if model.guestOS == .macOS {
                 WorkspacePathField(title: "macOS restore image", placeholder: "Apple Silicon .ipsw file", path: $model.restoreImagePath) { chooseMedia("ipsw", binding: $model.restoreImagePath) }
+                HStack(spacing: 10) {
+                    Button(model.mediaDownloadInProgress ? "Downloading…" : "Download latest from Apple") { downloadLatestAppleRestoreImage() }
+                        .disabled(model.mediaDownloadInProgress || model.isVMInUse)
+                    if model.mediaDownloadInProgress { Button("Cancel") { model.cancelMediaDownload() } }
+                }
+                HStack(spacing: 10) {
+                    TextField("macOS version, e.g. 26.6.2", text: $model.macOSInstallerVersion)
+                        .frame(maxWidth: 190)
+                    Button("List compatible versions") { model.openTerminalForMacOSInstallerList() }
+                    Button("Download with Terminal") { model.openTerminalForMacOSInstallerDownload() }
+                }
+                if !model.mediaDownloadStatus.isEmpty { Text(model.mediaDownloadStatus).font(.caption).foregroundStyle(.secondary) }
+                Text("If Apple’s restore-image catalogue is unavailable, use Terminal to download Apple’s compatible installer into Applications, then select its restore image here.").font(.caption).foregroundStyle(.secondary)
+                Button("Open Apple macOS download help") { NSWorkspace.shared.open(OSMediaSource.appleMacOSDownloadPage) }
             } else {
                 WorkspacePathField(title: "Installation media", placeholder: "ARM64 / AArch64 .iso file", path: $model.installationISOPath) { chooseMedia("iso", binding: $model.installationISOPath) }
                 Text("Use an ARM64 image with EFI support. x86 installers cannot boot this workspace.").font(.caption).foregroundStyle(.secondary)
+                if model.guestOS == .linuxARM {
+                    Button("Open Ubuntu ARM64 downloads") { NSWorkspace.shared.open(OSMediaSource.ubuntuARM64Page) }
+                }
                 if model.guestOS == .windowsARM {
+                    Button("Open Microsoft Windows 11 ARM64 download") { NSWorkspace.shared.open(OSMediaSource.windowsARM64Page) }
                     WorkspacePathField(title: "Network driver media (optional)", placeholder: "ISO containing ARM64 VirtIO drivers", path: $model.windowsDriverISOPath) { chooseMedia("iso", binding: $model.windowsDriverISOPath) }
                     Text("Windows requires QEMU 9.2+ and swtpm. Install the ARM64 VirtIO network driver to use NAT networking.").font(.caption).foregroundStyle(.secondary)
                     DisclosureGroup("Windows backend", isExpanded: $backendExpanded) {
@@ -369,6 +387,16 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
         panel.canChooseDirectories = false
         if let suffix, let type = UTType(filenameExtension: suffix) { panel.allowedContentTypes = [type] }
         if panel.runModal() == .OK, let url = panel.url { binding.wrappedValue = url.path }
+    }
+
+    private func downloadLatestAppleRestoreImage() {
+        let panel = NSSavePanel()
+        panel.title = "Save Apple restore image"
+        panel.prompt = "Download"
+        panel.nameFieldStringValue = "macOS-latest.ipsw"
+        panel.allowedContentTypes = [UTType(filenameExtension: "ipsw")!]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.downloadLatestMacOSRestoreImage(to: url)
     }
 
     private func installGuest() {
