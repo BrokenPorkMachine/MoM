@@ -87,6 +87,10 @@ targets:
       - path: Core/VMHardware.swift
       - path: Core/VMConnectivity.swift
       - path: Core/VMRegistry.swift
+      - path: Core/VMRuntimeService.swift
+      - path: Core/VMQEMUService.swift
+      - path: Core/HostGuestExchange.swift
+      - path: Core/Diagnostics.swift
     settings:
       base:
         PRODUCT_NAME: MacOnMacVMControl

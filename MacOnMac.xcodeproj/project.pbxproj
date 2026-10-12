@@ -23,8 +23,10 @@
 		36851D5FCF9275DF3A132390 /* DiskLeaseStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD4F9088ABFE5D0FC9B7609B /* DiskLeaseStateMachine.swift */; };
 		37EBB112178688958C95E147 /* DaemonBrokerContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */; };
 		3AA17B91A33747C7A9215E50 /* HostGuestExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0ACA4D938EEA52F5FA3AF6 /* HostGuestExchange.swift */; };
+		43FB0CF4D2341402026C2356 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D58ACD25C2763022863959 /* Diagnostics.swift */; };
 		46DE306FA40708C45DB485F1 /* VMControlContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8203070DAFCE9E7474056247 /* VMControlContract.swift */; };
 		4BAD1EE748D56F566397051A /* BrokerAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */; };
+		4DC4F008470604BC833DA2EF /* HostGuestExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0ACA4D938EEA52F5FA3AF6 /* HostGuestExchange.swift */; };
 		502374C8E99BA308C5762004 /* VMGuest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */; };
 		5CDA92D9238CA903F5F2078D /* CompatibilityEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8540A5CB8020E2AB64F544E0 /* CompatibilityEngine.swift */; };
 		5DBB14E0090703006B892768 /* VMQEMUService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39837CDA93FA23DEC0536D74 /* VMQEMUService.swift */; };
@@ -38,6 +40,7 @@
 		81BF08E5F950A124C6825112 /* MacOnMacVMControl in Resources */ = {isa = PBXBuildFile; fileRef = 2EB485ACEA6A57ABBD809610 /* MacOnMacVMControl */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		87B5B79FB378D5026A026435 /* DeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F187B0DF0653F4D8E8DCE088 /* DeviceInventoryService.swift */; };
 		8A66B5BE6BCD5E3F053368DA /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48893E5306A3C5CF320BFE4F /* DashboardView.swift */; };
+		8F65D9D3DA226DD50F25AD49 /* VMRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286498E4E85DB19F6711DC3B /* VMRuntimeService.swift */; };
 		9722673795E72EA0BDAD4F40 /* BrokerAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */; };
 		98528D6A9EBEF79EDA8BCDE6 /* PhysicalDiskPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD461E9CC2FE3796209A141 /* PhysicalDiskPreflight.swift */; };
 		9887ACB7E6B055594EA2F77B /* VMGuest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */; };
@@ -45,6 +48,7 @@
 		9F6F28D733925EBFB14CA656 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6080AEFE70DF37E0A9500AE8 /* main.swift */; };
 		A128BACB3BEF07C5CA584340 /* VMRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB69D9E98DCFE4FDCBE9A3B /* VMRegistry.swift */; };
 		A1677320DF7A63C0100C0B47 /* VMRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286498E4E85DB19F6711DC3B /* VMRuntimeService.swift */; };
+		AEC6DAC6BF35867DD9E7D0E3 /* VMQEMUService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39837CDA93FA23DEC0536D74 /* VMQEMUService.swift */; };
 		B5381242BAA82AADEE237BF7 /* DiskBrokerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F7D92D060D8D9ED111F0B0 /* DiskBrokerClient.swift */; };
 		BEEA68B3455BEE8CE69D5E0A /* DaemonBrokerContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */; };
 		CA862EED5DFC3EFEC8EC19B3 /* VMConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86559D2A04663F65AAE436AA /* VMConnectivity.swift */; };
@@ -413,13 +417,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				43FB0CF4D2341402026C2356 /* Diagnostics.swift in Sources */,
+				4DC4F008470604BC833DA2EF /* HostGuestExchange.swift in Sources */,
 				F913A4DB09D23FFDEF3E1703 /* VMBackendTrust.swift in Sources */,
 				D5E8BE3E11A890600456E738 /* VMConnectivity.swift in Sources */,
 				2B123C48961C73624C875E29 /* VMControlContract.swift in Sources */,
 				DF615A888ADED869D5E7C1BA /* VMDiskImage.swift in Sources */,
 				9887ACB7E6B055594EA2F77B /* VMGuest.swift in Sources */,
 				2B85D6AF736326C6A1A66824 /* VMHardware.swift in Sources */,
+				AEC6DAC6BF35867DD9E7D0E3 /* VMQEMUService.swift in Sources */,
 				A128BACB3BEF07C5CA584340 /* VMRegistry.swift in Sources */,
+				8F65D9D3DA226DD50F25AD49 /* VMRuntimeService.swift in Sources */,
 				9F6F28D733925EBFB14CA656 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

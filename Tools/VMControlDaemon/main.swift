@@ -1,6 +1,7 @@
 import Foundation
 
 final class VMControlService: NSObject, MacOnMacVMControlProtocol {
+    @MainActor private lazy var runtime = VMRuntimeService()
     func health(withReply reply: @escaping (String) -> Void) {
         reply(VMControlContract.encode(VMControlContract.health()))
     }
@@ -22,6 +23,31 @@ final class VMControlService: NSObject, MacOnMacVMControlProtocol {
             reply(VMControlContract.encode(Item(id: record.id, path: folder, state: record.state,
                                                  guestOS: record.guestOS, diskSizeGiB: record.diskSizeGiB)))
         } catch { reply("{\"error\":\"invalid_workspace\"}") }
+    }
+
+    func start(_ folder: String, withReply reply: @escaping (String) -> Void) {
+        Task { @MainActor in
+            do { try await runtime.startExistingVM(at: URL(fileURLWithPath: folder, isDirectory: true)); reply("{\"operation\":\"start\",\"state\":\"running\"}") }
+            catch { reply("{\"operation\":\"start\",\"error\":\"failed\"}") }
+        }
+    }
+
+    func stop(withReply reply: @escaping (String) -> Void) {
+        Task { @MainActor in
+            do { try await runtime.stop(); reply("{\"operation\":\"stop\",\"state\":\"stopped\"}") }
+            catch { reply("{\"operation\":\"stop\",\"error\":\"failed\"}") }
+        }
+    }
+
+    func provision(_ folder: String, restoreImage: String, diskSizeGiB: Int,
+                   withReply reply: @escaping (String) -> Void) {
+        Task { @MainActor in
+            do {
+                try await runtime.provision(at: URL(fileURLWithPath: folder, isDirectory: true),
+                                            restoreImageURL: URL(fileURLWithPath: restoreImage), diskSizeGiB: diskSizeGiB)
+                reply("{\"operation\":\"provision\",\"state\":\"installed\"}")
+            } catch { reply("{\"operation\":\"provision\",\"error\":\"failed\"}") }
+        }
     }
 
     private func safeDirectory(_ path: String) -> Bool {

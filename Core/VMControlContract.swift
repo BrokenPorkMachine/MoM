@@ -5,6 +5,10 @@ import Foundation
     func health(withReply reply: @escaping (String) -> Void)
     func inventory(_ root: String, withReply reply: @escaping (String) -> Void)
     func status(_ folder: String, withReply reply: @escaping (String) -> Void)
+    func start(_ folder: String, withReply reply: @escaping (String) -> Void)
+    func stop(withReply reply: @escaping (String) -> Void)
+    func provision(_ folder: String, restoreImage: String, diskSizeGiB: Int,
+                   withReply reply: @escaping (String) -> Void)
 }
 #endif
 
@@ -17,7 +21,7 @@ enum VMControlContract {
 
     struct Health: Codable { let protocolVersion: Int; let release: String; let operations: [String] }
     static func health() -> Health {
-        Health(protocolVersion: protocolVersion, release: "0.16.0", operations: ["health", "inventory", "status"])
+        Health(protocolVersion: protocolVersion, release: "0.16.0", operations: ["health", "inventory", "status", "start", "stop", "provision"])
     }
     static func encode<T: Encodable>(_ value: T) -> String {
         guard let data = try? JSONEncoder().encode(value), data.count <= maxPayloadBytes else { return "{}" }
