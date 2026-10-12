@@ -60,6 +60,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
     }
 
     func startExistingVM(at folder: URL) async throws {
+        Diagnostics.record("VM start requested", category: "startup")
         #if arch(arm64)
         guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
@@ -115,6 +116,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
     }
 
     func stop() async throws {
+        Diagnostics.record("VM stop requested", category: "shutdown")
         guard !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
         defer { operationInProgress = false }
