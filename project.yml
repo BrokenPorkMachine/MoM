@@ -67,5 +67,6 @@ targets:
       base:
         PRODUCT_NAME: MacOnMacRawDiskDaemon
         PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac.RawDiskBroker
+        OTHER_CODE_SIGN_FLAGS: "--identifier ca.zensoftware.MacOnMac.RawDiskBroker"
         CODE_SIGN_ENTITLEMENTS: ""
         ENABLE_HARDENED_RUNTIME: YES
