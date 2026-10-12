@@ -3,6 +3,6 @@
 <plist version="1.0"><dict>
 <key>Label</key><string>ca.zensoftware.MacOnMac.VMControl</string>
 <key>MachServices</key><dict><key>ca.zensoftware.MacOnMac.VMControl</key><true/></dict>
-<key>Program</key><string>Contents/MacOS/MacOnMacVMControl</string>
+<key>BundleProgram</key><string>Contents/MacOS/MacOnMacVMControl</string>
 <key>AssociatedBundleIdentifiers</key><array><string>ca.zensoftware.MacOnMac</string></array>
 </dict></plist>

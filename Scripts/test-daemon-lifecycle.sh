@@ -8,5 +8,6 @@ rg -q 'approval-denied|approval denied|Approval' Docs/DAEMON_COMPONENT_SPEC.md D
 rg -q 'healthReport' Docs/DAEMON_COMPONENT_SPEC.md
 rg -q 'MacOnMacVMControl' project.yml MacOnMac.xcodeproj/project.pbxproj
 rg -q 'per-user launch-agent Mach service|never runs as root' Tools/VMControlDaemon/main.swift
+rg -q 'SMAppService\.agent|func register|func unregister' Core/VMControlClient.swift
 plutil -lint Resources/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist >/dev/null
 echo "PASS: daemon install, approval, upgrade, health, and removal lifecycle is documented and wired"
