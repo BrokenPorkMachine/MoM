@@ -9,6 +9,6 @@ maconmac-vm inventory --root <directory>
 maconmac-vm status --vm <directory>
 ```
 
-`inventory` and `status` are implemented by `Scripts/build-vm-cli.sh`. Provision/start/stop remain reserved command names until the signed app package can safely host the asynchronous Virtualization.framework runtime and administrator authentication path.
+`inventory` and `status` are implemented by `Scripts/build-vm-cli.sh`. The packaged per-user `MacOnMacVMControl` XPC daemon owns the same registry and workspace lease contracts. Provision/start/stop remain reserved command names until the signed app package can safely host the asynchronous Virtualization.framework runtime and administrator authentication path.
 
 The CLI must use the same workspace lease as the app, refuse a competing owner with exit `4`, never print pairing secrets, and authenticate administrator actions through the invoking user/session. Provisioning and start/stop must report stable fields (`id`, `state`, `path`, `operation`, `error`) and preserve the VM workspace on failure. The current repository has the core lease and registry contracts; packaging this CLI with the signed app and wiring asynchronous Virtualization.framework operations remains a release integration task.

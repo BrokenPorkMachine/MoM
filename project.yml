@@ -35,10 +35,14 @@ targets:
           mkdir -p "${OUT}/MacOS" "${OUT}/Library/LaunchDaemons"
           cp "${BUILT_PRODUCTS_DIR}/MacOnMacRawDiskDaemon" "${OUT}/MacOS/VolumeBootRawDiskDaemon"
           cp "${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist" "${OUT}/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist"
+          cp "${BUILT_PRODUCTS_DIR}/MacOnMacVMControl" "${OUT}/MacOS/MacOnMacVMControl"
+          mkdir -p "${OUT}/Library/LaunchAgents"
+          cp "${SRCROOT}/Resources/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist" "${OUT}/Library/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist"
     dependencies:
       - target: MacOnMacDiskBroker
         embed: true
       - target: MacOnMacRawDiskDaemon
+      - target: MacOnMacVMControl
   MacOnMacDiskBroker:
     type: xpc-service
     platform: macOS
@@ -68,5 +72,24 @@ targets:
         PRODUCT_NAME: MacOnMacRawDiskDaemon
         PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac.RawDiskBroker
         OTHER_CODE_SIGN_FLAGS: "--identifier ca.zensoftware.MacOnMac.RawDiskBroker"
+        CODE_SIGN_ENTITLEMENTS: ""
+        ENABLE_HARDENED_RUNTIME: YES
+
+  MacOnMacVMControl:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Tools/VMControlDaemon/main.swift
+      - path: Core/VMControlContract.swift
+      - path: Core/VMDiskImage.swift
+      - path: Core/VMBackendTrust.swift
+      - path: Core/VMGuest.swift
+      - path: Core/VMHardware.swift
+      - path: Core/VMConnectivity.swift
+      - path: Core/VMRegistry.swift
+    settings:
+      base:
+        PRODUCT_NAME: MacOnMacVMControl
+        PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac.VMControl
         CODE_SIGN_ENTITLEMENTS: ""
         ENABLE_HARDENED_RUNTIME: YES

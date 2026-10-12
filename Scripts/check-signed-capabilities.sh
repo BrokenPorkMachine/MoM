@@ -6,4 +6,6 @@ app="${1:-}"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" | grep -qx 'ca.zensoftware.MacOnMac'
 [[ -x "$app/Contents/MacOS/MacOnMacRawDiskDaemon" ]]
 [[ -f "$app/Contents/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist" ]]
+[[ -x "$app/Contents/MacOS/MacOnMacVMControl" ]]
+[[ -f "$app/Contents/Library/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist" ]]
 echo "PASS: signed app structure and daemon capability boundary verified"

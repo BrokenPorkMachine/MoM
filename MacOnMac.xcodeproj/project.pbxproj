@@ -1,134 +1,826 @@
 // !$*UTF8*$!
 {
- archiveVersion = 1;
- classes = {};
- objectVersion = 56;
- objects = {
-  AF60D799CBC3DF7DE446F737 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel.swift"; sourceTree = "<group>"; };
-  99FE965121308A0F7A32AE9B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DashboardView.swift"; sourceTree = "<group>"; };
-  A2D8D989163F3C478EDFB7AC = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMConsoleView.swift"; sourceTree = "<group>"; };
-  08BAD97AF883E03E88F77901 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMDiskImagesView.swift"; sourceTree = "<group>"; };
-  677835E004004BD8B3B3F7EB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMWorkspaceView.swift"; sourceTree = "<group>"; };
-  C0F6CAFFB437979F67DCA255 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VolumeBootApp.swift"; sourceTree = "<group>"; };
-  59DD54FDB8261BE0F519D4B6 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceComponents.swift"; sourceTree = "<group>"; };
-  2E09A37A513ADCE774F19108 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APFSInspector.swift"; sourceTree = "<group>"; };
-  061B9E4008BDBA37C0F94E42 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrokerAuthorizationPolicy.swift"; sourceTree = "<group>"; };
-  B6ADD2BCD6F1C1972F5AC7B4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BrokerProtocolContract.swift"; sourceTree = "<group>"; };
-  BA903C80E53EADB2F17BC689 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompatibilityEngine.swift"; sourceTree = "<group>"; };
-  2D53F046E34314BF6042057F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DaemonBrokerContract.swift"; sourceTree = "<group>"; };
-  1AB06B67CED710E7C804B118 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeviceInventoryService.swift"; sourceTree = "<group>"; };
-  9489A210FF7F547BBAB2CA1D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Diagnostics.swift"; sourceTree = "<group>"; };
-  841199347F5A4668C3B77F55 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiskAccessContract.swift"; sourceTree = "<group>"; };
-  A703B30DC431BBEA5B7F91CF = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiskBrokerClient.swift"; sourceTree = "<group>"; };
-  C4AAC36B6D7DCA37629DEFD7 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiskLeaseStateMachine.swift"; sourceTree = "<group>"; };
-  608BFAD516BCD1FF7DDD867F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiskutilProcess.swift"; sourceTree = "<group>"; };
-  C9FC87CE5480ED2DBF4AB53D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GuestToolsProtocol.swift"; sourceTree = "<group>"; };
-  18A7941C9746EEF9A9B2C219 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HostGuestExchange.swift"; sourceTree = "<group>"; };
-  BC9884F9E5E075D7CB560380 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MacOSInstallationDetector.swift"; sourceTree = "<group>"; };
-  9056B55A1E655013278653C5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhysicalDiskAccess.swift"; sourceTree = "<group>"; };
-  DD28E7598FA495DF4AAF316C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhysicalDiskPreflight.swift"; sourceTree = "<group>"; };
-  E6F6B58CE6C64D63B510745D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhysicalDiskSafetyPolicy.swift"; sourceTree = "<group>"; };
-  55CC0197A4C9BFB3345C7789 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhysicalDiskTopologyProof.swift"; sourceTree = "<group>"; };
-  A4356CE67EF32F2DEFB0A7CE = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrivilegedBrokerClient.swift"; sourceTree = "<group>"; };
-  6C152568F8438923F2C34FBF = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReadOnlyGrantPolicy.swift"; sourceTree = "<group>"; };
-  150A9EBA6526D68739670866 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageDevice.swift"; sourceTree = "<group>"; };
-  EA5C3D06B16677C84491BF1E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TaskDispatchQueue.swift"; sourceTree = "<group>"; };
-  F59F924D558F3B0F438DD329 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMBackendTrust.swift"; sourceTree = "<group>"; };
-  57BA3CED236A350CDBE04E8B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMConnectivity.swift"; sourceTree = "<group>"; };
-  AB6ABACFFF2C399C872C4734 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMDiskImage.swift"; sourceTree = "<group>"; };
-  77387074418473E2197BF3F2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMGuest.swift"; sourceTree = "<group>"; };
-  E3C7D5A45BE6A77343A37953 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMHardware.swift"; sourceTree = "<group>"; };
-  727FDF63519399DC6F9DAFFE = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMQEMUService.swift"; sourceTree = "<group>"; };
-  C83B809E3CDE5801A7E23F55 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMReadiness.swift"; sourceTree = "<group>"; };
-  4711D2541675FE2F07CD9037 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMRegistry.swift"; sourceTree = "<group>"; };
-  97E59D710C5F553400C22722 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VMRuntimeService.swift"; sourceTree = "<group>"; };
-  6447FB5971745F52A3CFBBD2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "main.swift"; sourceTree = "<group>"; };
-  A693ADAD6ADBEE1BAB42358A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhysicalDiskTopologyProbe.swift"; sourceTree = "<group>"; };
-  D24130012CB9386F7B7E6695 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TrustedDiskProbe.swift"; sourceTree = "<group>"; };
-  38D460E258B55B7B9BCF0562 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "main.swift"; sourceTree = "<group>"; };
-  36992FD9EFCC35941EC8F506 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacOnMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-  87AA7E758F482289639E8043 = { isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = MacOnMacDiskBroker.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
-  36C7041C54F393C9E48E248A = { isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MacOnMacRawDiskDaemon; sourceTree = BUILT_PRODUCTS_DIR; };
-  6848D4F71A85F094641ACD18 = { isa = PBXGroup; children = ( AF60D799CBC3DF7DE446F737, 99FE965121308A0F7A32AE9B, A2D8D989163F3C478EDFB7AC, 08BAD97AF883E03E88F77901, 677835E004004BD8B3B3F7EB, C0F6CAFFB437979F67DCA255, 59DD54FDB8261BE0F519D4B6, ); path = "App"; sourceTree = "<group>"; };
-  A4169AAC8741AF441B345759 = { isa = PBXGroup; children = ( 2E09A37A513ADCE774F19108, 061B9E4008BDBA37C0F94E42, B6ADD2BCD6F1C1972F5AC7B4, BA903C80E53EADB2F17BC689, 2D53F046E34314BF6042057F, 1AB06B67CED710E7C804B118, 9489A210FF7F547BBAB2CA1D, 841199347F5A4668C3B77F55, A703B30DC431BBEA5B7F91CF, C4AAC36B6D7DCA37629DEFD7, 608BFAD516BCD1FF7DDD867F, C9FC87CE5480ED2DBF4AB53D, 18A7941C9746EEF9A9B2C219, BC9884F9E5E075D7CB560380, 9056B55A1E655013278653C5, DD28E7598FA495DF4AAF316C, E6F6B58CE6C64D63B510745D, 55CC0197A4C9BFB3345C7789, A4356CE67EF32F2DEFB0A7CE, 6C152568F8438923F2C34FBF, 150A9EBA6526D68739670866, EA5C3D06B16677C84491BF1E, F59F924D558F3B0F438DD329, 57BA3CED236A350CDBE04E8B, AB6ABACFFF2C399C872C4734, 77387074418473E2197BF3F2, E3C7D5A45BE6A77343A37953, 727FDF63519399DC6F9DAFFE, C83B809E3CDE5801A7E23F55, 4711D2541675FE2F07CD9037, 97E59D710C5F553400C22722, ); path = "Core"; sourceTree = "<group>"; };
-  125AEDA2EBCBAF183943CB6F = { isa = PBXGroup; children = ( 6447FB5971745F52A3CFBBD2, ); path = "Helpers/VolumeBootDiskBroker"; sourceTree = "<group>"; };
-  878982697CD8DAE10CB27F94 = { isa = PBXGroup; children = ( A693ADAD6ADBEE1BAB42358A, D24130012CB9386F7B7E6695, 38D460E258B55B7B9BCF0562, ); path = "Privileged/VolumeBootRawDiskDaemon"; sourceTree = "<group>"; };
-  A64056210157E8BBD05481EA = { isa = PBXGroup; children = (); path = Resources; sourceTree = "<group>"; };
-  A3950DD6073E5AAB91CC4053 = { isa = PBXGroup; children = ( 36992FD9EFCC35941EC8F506, 87AA7E758F482289639E8043, 36C7041C54F393C9E48E248A, ); name = Products; sourceTree = "<group>"; };
-  D3718E870CD7F2BCC652554B = { isa = PBXGroup; children = ( 6848D4F71A85F094641ACD18, A4169AAC8741AF441B345759, 125AEDA2EBCBAF183943CB6F, 878982697CD8DAE10CB27F94, A64056210157E8BBD05481EA, A3950DD6073E5AAB91CC4053, ); sourceTree = "<group>"; };
-  74C4961FA22F366668F977FB = { isa = PBXBuildFile; fileRef = AF60D799CBC3DF7DE446F737; };
-  CCF5F08621A6A2464AAE7A0A = { isa = PBXBuildFile; fileRef = 99FE965121308A0F7A32AE9B; };
-  456FF5D4C392F2429AD53965 = { isa = PBXBuildFile; fileRef = A2D8D989163F3C478EDFB7AC; };
-  6E363786B432E813581C9C9F = { isa = PBXBuildFile; fileRef = 08BAD97AF883E03E88F77901; };
-  8BB20A459D5C07FF93C1AEF8 = { isa = PBXBuildFile; fileRef = 677835E004004BD8B3B3F7EB; };
-  A68083879245482604675235 = { isa = PBXBuildFile; fileRef = C0F6CAFFB437979F67DCA255; };
-  B2BE155871131FE47B1CE4B3 = { isa = PBXBuildFile; fileRef = 59DD54FDB8261BE0F519D4B6; };
-  F269DDEFD8A0C725A2691BFD = { isa = PBXBuildFile; fileRef = 2E09A37A513ADCE774F19108; };
-  CAFE26192CE8CB8111AFA162 = { isa = PBXBuildFile; fileRef = 061B9E4008BDBA37C0F94E42; };
-  35575B86EB999AAC3BF89DEE = { isa = PBXBuildFile; fileRef = B6ADD2BCD6F1C1972F5AC7B4; };
-  073FC50DECE072CF4420DD91 = { isa = PBXBuildFile; fileRef = BA903C80E53EADB2F17BC689; };
-  1D0E835544461F08F4D2CBAA = { isa = PBXBuildFile; fileRef = 2D53F046E34314BF6042057F; };
-  2F6766289A05E220EEC08D2A = { isa = PBXBuildFile; fileRef = 1AB06B67CED710E7C804B118; };
-  048707789BC10BC10EE9E318 = { isa = PBXBuildFile; fileRef = 9489A210FF7F547BBAB2CA1D; };
-  682069D018D6263C5B70CEFA = { isa = PBXBuildFile; fileRef = 841199347F5A4668C3B77F55; };
-  8EEACC68A5E5AFFDFD163914 = { isa = PBXBuildFile; fileRef = A703B30DC431BBEA5B7F91CF; };
-  13CEFB1D3281890FAD1C054C = { isa = PBXBuildFile; fileRef = C4AAC36B6D7DCA37629DEFD7; };
-  8B688E1783994B9396A0265C = { isa = PBXBuildFile; fileRef = 608BFAD516BCD1FF7DDD867F; };
-  99A7732FEC975A819B30D2BA = { isa = PBXBuildFile; fileRef = C9FC87CE5480ED2DBF4AB53D; };
-  512079A651A6E473620969A6 = { isa = PBXBuildFile; fileRef = 18A7941C9746EEF9A9B2C219; };
-  D6A117FB5F6326A365B6D979 = { isa = PBXBuildFile; fileRef = BC9884F9E5E075D7CB560380; };
-  9B0E067C67817CEC1900FDF5 = { isa = PBXBuildFile; fileRef = DD28E7598FA495DF4AAF316C; };
-  A81332B4C6F10D9F7CDAF8B1 = { isa = PBXBuildFile; fileRef = E6F6B58CE6C64D63B510745D; };
-  DEA7BDAEC4D3F67E4B0F1900 = { isa = PBXBuildFile; fileRef = 55CC0197A4C9BFB3345C7789; };
-  84E24EF682F886D8E9B4F6D7 = { isa = PBXBuildFile; fileRef = A4356CE67EF32F2DEFB0A7CE; };
-  16F87E4DF56E2A22348C56EB = { isa = PBXBuildFile; fileRef = 150A9EBA6526D68739670866; };
-  EDB00EB44EF4AB0836AF33AD = { isa = PBXBuildFile; fileRef = EA5C3D06B16677C84491BF1E; };
-  C5B885F0170A8084C512DD31 = { isa = PBXBuildFile; fileRef = F59F924D558F3B0F438DD329; };
-  A381B3914EA7C00DD1DCDE40 = { isa = PBXBuildFile; fileRef = 57BA3CED236A350CDBE04E8B; };
-  67994436A8469038E8A3D46F = { isa = PBXBuildFile; fileRef = AB6ABACFFF2C399C872C4734; };
-  F945E4C81A363D0CDE1F3527 = { isa = PBXBuildFile; fileRef = 77387074418473E2197BF3F2; };
-  0409CF37E5783325F82AE566 = { isa = PBXBuildFile; fileRef = E3C7D5A45BE6A77343A37953; };
-  B6C874E3253CECF25A6DDB93 = { isa = PBXBuildFile; fileRef = 727FDF63519399DC6F9DAFFE; };
-  5A1AA3614213ABD340A7A862 = { isa = PBXBuildFile; fileRef = C83B809E3CDE5801A7E23F55; };
-  5C15A515CA3FB5D8D7BBC56F = { isa = PBXBuildFile; fileRef = 4711D2541675FE2F07CD9037; };
-  4FB894CD9EAB598851D0DC17 = { isa = PBXBuildFile; fileRef = 97E59D710C5F553400C22722; };
-  CD5BB54F4C40F0389DA20DE7 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 74C4961FA22F366668F977FB, CCF5F08621A6A2464AAE7A0A, 456FF5D4C392F2429AD53965, 6E363786B432E813581C9C9F, 8BB20A459D5C07FF93C1AEF8, A68083879245482604675235, B2BE155871131FE47B1CE4B3, F269DDEFD8A0C725A2691BFD, CAFE26192CE8CB8111AFA162, 35575B86EB999AAC3BF89DEE, 073FC50DECE072CF4420DD91, 1D0E835544461F08F4D2CBAA, 2F6766289A05E220EEC08D2A, 048707789BC10BC10EE9E318, 682069D018D6263C5B70CEFA, 8EEACC68A5E5AFFDFD163914, 13CEFB1D3281890FAD1C054C, 8B688E1783994B9396A0265C, 99A7732FEC975A819B30D2BA, 512079A651A6E473620969A6, D6A117FB5F6326A365B6D979, 9B0E067C67817CEC1900FDF5, A81332B4C6F10D9F7CDAF8B1, DEA7BDAEC4D3F67E4B0F1900, 84E24EF682F886D8E9B4F6D7, 16F87E4DF56E2A22348C56EB, EDB00EB44EF4AB0836AF33AD, C5B885F0170A8084C512DD31, A381B3914EA7C00DD1DCDE40, 67994436A8469038E8A3D46F, F945E4C81A363D0CDE1F3527, 0409CF37E5783325F82AE566, B6C874E3253CECF25A6DDB93, 5A1AA3614213ABD340A7A862, 5C15A515CA3FB5D8D7BBC56F, 4FB894CD9EAB598851D0DC17, ); runOnlyForDeploymentPostprocessing = 0; };
-  961F75F80AB7E7F61CD34CC4 = { isa = PBXBuildFile; fileRef = 6447FB5971745F52A3CFBBD2; };
-  79545DEF0060A90B816E4B83 = { isa = PBXBuildFile; fileRef = 061B9E4008BDBA37C0F94E42; };
-  F6CC674C7818E4780640DD92 = { isa = PBXBuildFile; fileRef = B6ADD2BCD6F1C1972F5AC7B4; };
-  7DD2DFD3DBFE005F32C84045 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( 961F75F80AB7E7F61CD34CC4, 79545DEF0060A90B816E4B83, F6CC674C7818E4780640DD92, ); runOnlyForDeploymentPostprocessing = 0; };
-  AA4CFC6306C375D9D62C8B37 = { isa = PBXBuildFile; fileRef = 38D460E258B55B7B9BCF0562; };
-  F24A8B768B9AFCB1D6C7740E = { isa = PBXBuildFile; fileRef = 061B9E4008BDBA37C0F94E42; };
-  FAB8AE716E7900944D35E972 = { isa = PBXBuildFile; fileRef = 2D53F046E34314BF6042057F; };
-  16B976785D760EB726E6B622 = { isa = PBXBuildFile; fileRef = 55CC0197A4C9BFB3345C7789; };
-  1256D97018D194B84AC31349 = { isa = PBXBuildFile; fileRef = A693ADAD6ADBEE1BAB42358A; };
-  E5FF779B79678E3CA2096F2C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( AA4CFC6306C375D9D62C8B37, F24A8B768B9AFCB1D6C7740E, FAB8AE716E7900944D35E972, 16B976785D760EB726E6B622, 1256D97018D194B84AC31349, ); runOnlyForDeploymentPostprocessing = 0; };
-  581253C393EC5D2EA078C5FE = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-  8C90C9401A6B401A23154B5B = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-  B2087E18941841BEC2D9CE14 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-  6BC7FFDE20F1B79B022A4821 = { isa = PBXBuildFile; fileRef = 87AA7E758F482289639E8043; settings = { ATTRIBUTES = ( CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-  59F0EF556AF35CA7586D8A1E = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ( 6BC7FFDE20F1B79B022A4821, ); name = "Embed XPC Service"; runOnlyForDeploymentPostprocessing = 0; };
-  E2123C72D85E775800A41910 = { isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); name = "Bundle launchd daemon"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/bash; shellScript = "set -euo pipefail\nOUT=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}\"\nmkdir -p \"${OUT}/MacOS\" \"${OUT}/Library/LaunchDaemons\"\ncp \"${BUILT_PRODUCTS_DIR}/MacOnMacRawDiskDaemon\" \"${OUT}/MacOS/VolumeBootRawDiskDaemon\"\ncp \"${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist\" \"${OUT}/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist\"\n"; };
-  7E5AEBC90243B892F06BC1C8 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 3D3902585F7584F30F560C77; remoteInfo = MacOnMacDiskBroker; };
-  A6AAAE3590693F92DC78CB83 = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 769A1F414FF9B66F825DBC3F; remoteInfo = MacOnMacRawDiskDaemon; };
-  4CAD0AA9157329C9403037E4 = { isa = PBXTargetDependency; target = 3D3902585F7584F30F560C77; targetProxy = 7E5AEBC90243B892F06BC1C8; };
-  98A30849F083FCC185E9431A = { isa = PBXTargetDependency; target = 769A1F414FF9B66F825DBC3F; targetProxy = A6AAAE3590693F92DC78CB83; };
-  22AF9F81241F14892C08B5BA = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac; PRODUCT_NAME = MacOnMac; INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_ENTITLEMENTS = Resources/MacOnMac.entitlements; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };
-  DAE7C7112EBEC7C99725BBE3 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac; PRODUCT_NAME = MacOnMac; INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_ENTITLEMENTS = Resources/MacOnMac.entitlements; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_COMPILATION_MODE = wholemodule; }; name = Release; };
-  BD2076C6C4107032FC52875B = { isa = XCConfigurationList; buildConfigurations = ( 22AF9F81241F14892C08B5BA, DAE7C7112EBEC7C99725BBE3, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-  19875184052BC8F56CBC9A5D = { isa = PBXNativeTarget; buildConfigurationList = BD2076C6C4107032FC52875B; buildPhases = ( CD5BB54F4C40F0389DA20DE7, 581253C393EC5D2EA078C5FE, 59F0EF556AF35CA7586D8A1E, E2123C72D85E775800A41910, ); buildRules = (); dependencies = ( 4CAD0AA9157329C9403037E4, 98A30849F083FCC185E9431A, ); name = MacOnMac; productName = MacOnMac; productReference = 36992FD9EFCC35941EC8F506; productType = "com.apple.product-type.application"; };
-  2F325DDF5B331551C82BA9A5 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.DiskBroker; PRODUCT_NAME = MacOnMacDiskBroker; INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_ENTITLEMENTS = ""; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };
-  28BC80D4F8AC0268DCB5E2A1 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.DiskBroker; PRODUCT_NAME = MacOnMacDiskBroker; INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_ENTITLEMENTS = ""; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_COMPILATION_MODE = wholemodule; }; name = Release; };
-  7CD2E8F71CC8F5D2154AEB66 = { isa = XCConfigurationList; buildConfigurations = ( 2F325DDF5B331551C82BA9A5, 28BC80D4F8AC0268DCB5E2A1, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-  3D3902585F7584F30F560C77 = { isa = PBXNativeTarget; buildConfigurationList = 7CD2E8F71CC8F5D2154AEB66; buildPhases = ( 7DD2DFD3DBFE005F32C84045, 8C90C9401A6B401A23154B5B, ); buildRules = (); dependencies = (); name = MacOnMacDiskBroker; productName = MacOnMacDiskBroker; productReference = 87AA7E758F482289639E8043; productType = "com.apple.product-type.xpc-service"; };
-  DE4BD41CB70E917778BBCFD7 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.RawDiskBroker; PRODUCT_NAME = MacOnMacRawDiskDaemon; GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_ENTITLEMENTS = ""; OTHER_CODE_SIGN_FLAGS = "--identifier ca.zensoftware.MacOnMac.RawDiskBroker"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };
-  A7BB2E43FA1839193D142540 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_STRICT_CONCURRENCY = minimal; CODE_SIGN_STYLE = Automatic; ENABLE_HARDENED_RUNTIME = YES; PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.RawDiskBroker; PRODUCT_NAME = MacOnMacRawDiskDaemon; GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_ENTITLEMENTS = ""; OTHER_CODE_SIGN_FLAGS = "--identifier ca.zensoftware.MacOnMac.RawDiskBroker"; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_COMPILATION_MODE = wholemodule; }; name = Release; };
-  A8332E477C3437E6EF749EC1 = { isa = XCConfigurationList; buildConfigurations = ( DE4BD41CB70E917778BBCFD7, A7BB2E43FA1839193D142540, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-  769A1F414FF9B66F825DBC3F = { isa = PBXNativeTarget; buildConfigurationList = A8332E477C3437E6EF749EC1; buildPhases = ( E5FF779B79678E3CA2096F2C, B2087E18941841BEC2D9CE14, ); buildRules = (); dependencies = (); name = MacOnMacRawDiskDaemon; productName = MacOnMacRawDiskDaemon; productReference = 36C7041C54F393C9E48E248A; productType = "com.apple.product-type.tool"; };
-  89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; }; name = Debug; };
-  E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; buildSettings = { SWIFT_VERSION = 5.0; MACOSX_DEPLOYMENT_TARGET = 15.0; SDKROOT = macosx; }; name = Release; };
-  D61F2CF06FCB181B5F0A2B07 = { isa = XCConfigurationList; buildConfigurations = ( 89E1FD6268CC0F221A2BE178, E6DE6C99132752C914FEF632, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-  98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = { 19875184052BC8F56CBC9A5D = {CreatedOnToolsVersion = 16.0;}; 3D3902585F7584F30F560C77 = {CreatedOnToolsVersion = 16.0;}; 769A1F414FF9B66F825DBC3F = {CreatedOnToolsVersion = 16.0;}; }; }; buildConfigurationList = D61F2CF06FCB181B5F0A2B07; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = D3718E870CD7F2BCC652554B; productRefGroup = A3950DD6073E5AAB91CC4053; projectDirPath = ""; projectRoot = ""; targets = ( 19875184052BC8F56CBC9A5D, 3D3902585F7584F30F560C77, 769A1F414FF9B66F825DBC3F, ); };
- };
- rootObject = 98F54143AB4E86B28C3AFEE0;
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		022128B72A779F4EC6DC79DA /* BrokerProtocolContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82CA5EF2A4EC803190885D0 /* BrokerProtocolContract.swift */; };
+		042F5F2486C071D21D2B268E /* MacOnMacDiskBroker.xpc in CopyFiles */ = {isa = PBXBuildFile; fileRef = 89D40745BBA05D7A0442C4D5 /* MacOnMacDiskBroker.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		051BD8F460796F8128637615 /* PhysicalDiskTopologyProof.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4144DE2FD3992B4562B3DBA2 /* PhysicalDiskTopologyProof.swift */; };
+		0EE07B3527F19028C0A7E001 /* VMReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936466857FC93CEF8B8788E9 /* VMReadiness.swift */; };
+		10B891C883A134FC197E5ED2 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6707CF611011A6EA954D9789 /* main.swift */; };
+		15630C301FE38049267559C2 /* VMWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83EA2DFB6E187F9EA2EFAC51 /* VMWorkspaceView.swift */; };
+		16F79D84BF6CE02A99BBE9FA /* VMConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD56A700CE70FE13B9BAE98 /* VMConsoleView.swift */; };
+		1F592A3DE0AE792A298F6159 /* VolumeBootApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0747D2D75B16061FB9F7BAE /* VolumeBootApp.swift */; };
+		251CF780CBEF8EE75180F547 /* PrivilegedBrokerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF3337EEC50EB6526DED1A8 /* PrivilegedBrokerClient.swift */; };
+		2B123C48961C73624C875E29 /* VMControlContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8203070DAFCE9E7474056247 /* VMControlContract.swift */; };
+		2B85D6AF736326C6A1A66824 /* VMHardware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092E293F611F4AB53E0B9669 /* VMHardware.swift */; };
+		318173E3F96E404701C00A28 /* VMDiskImagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F64F212CF26C8A2963A079 /* VMDiskImagesView.swift */; };
+		341F981DFDB63D66F0B6D5B7 /* VMRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB69D9E98DCFE4FDCBE9A3B /* VMRegistry.swift */; };
+		36851D5FCF9275DF3A132390 /* DiskLeaseStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD4F9088ABFE5D0FC9B7609B /* DiskLeaseStateMachine.swift */; };
+		37EBB112178688958C95E147 /* DaemonBrokerContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */; };
+		3AA17B91A33747C7A9215E50 /* HostGuestExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0ACA4D938EEA52F5FA3AF6 /* HostGuestExchange.swift */; };
+		46DE306FA40708C45DB485F1 /* VMControlContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8203070DAFCE9E7474056247 /* VMControlContract.swift */; };
+		4BAD1EE748D56F566397051A /* BrokerAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */; };
+		502374C8E99BA308C5762004 /* VMGuest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */; };
+		5CDA92D9238CA903F5F2078D /* CompatibilityEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8540A5CB8020E2AB64F544E0 /* CompatibilityEngine.swift */; };
+		5DBB14E0090703006B892768 /* VMQEMUService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39837CDA93FA23DEC0536D74 /* VMQEMUService.swift */; };
+		5FE1FF230394D462CA6812F9 /* BrokerAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */; };
+		60156FCF965602D17D414559 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D58ACD25C2763022863959 /* Diagnostics.swift */; };
+		68CB5F3FBD2997AD58DDC368 /* DiskutilProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 767F1A7461657219DB177BDE /* DiskutilProcess.swift */; };
+		6E415494AC7071D6E05F1FC4 /* WorkspaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069691FDE6F1D11CB6D9CA09 /* WorkspaceComponents.swift */; };
+		728FF005460312C9AC53B621 /* TaskDispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3727E97007B564A4C52E17A5 /* TaskDispatchQueue.swift */; };
+		7576FD32BC0270F2E2451CD6 /* APFSInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA20580736D0655569EFACC4 /* APFSInspector.swift */; };
+		75D66BBDCEAD748E391F14C8 /* VMBackendTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4FD7037C4C02CB54AD89573 /* VMBackendTrust.swift */; };
+		81BF08E5F950A124C6825112 /* MacOnMacVMControl in Resources */ = {isa = PBXBuildFile; fileRef = 2EB485ACEA6A57ABBD809610 /* MacOnMacVMControl */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		87B5B79FB378D5026A026435 /* DeviceInventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F187B0DF0653F4D8E8DCE088 /* DeviceInventoryService.swift */; };
+		8A66B5BE6BCD5E3F053368DA /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48893E5306A3C5CF320BFE4F /* DashboardView.swift */; };
+		9722673795E72EA0BDAD4F40 /* BrokerAuthorizationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */; };
+		98528D6A9EBEF79EDA8BCDE6 /* PhysicalDiskPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD461E9CC2FE3796209A141 /* PhysicalDiskPreflight.swift */; };
+		9887ACB7E6B055594EA2F77B /* VMGuest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */; };
+		998A02D4DEC0D1282EE61E7C /* PhysicalDiskSafetyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4CEB9F82082089B8371825 /* PhysicalDiskSafetyPolicy.swift */; };
+		9F6F28D733925EBFB14CA656 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6080AEFE70DF37E0A9500AE8 /* main.swift */; };
+		A128BACB3BEF07C5CA584340 /* VMRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB69D9E98DCFE4FDCBE9A3B /* VMRegistry.swift */; };
+		A1677320DF7A63C0100C0B47 /* VMRuntimeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286498E4E85DB19F6711DC3B /* VMRuntimeService.swift */; };
+		B5381242BAA82AADEE237BF7 /* DiskBrokerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F7D92D060D8D9ED111F0B0 /* DiskBrokerClient.swift */; };
+		BEEA68B3455BEE8CE69D5E0A /* DaemonBrokerContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */; };
+		CA862EED5DFC3EFEC8EC19B3 /* VMConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86559D2A04663F65AAE436AA /* VMConnectivity.swift */; };
+		D5E8BE3E11A890600456E738 /* VMConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86559D2A04663F65AAE436AA /* VMConnectivity.swift */; };
+		DF615A888ADED869D5E7C1BA /* VMDiskImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2AB373C0424051C16BDC0 /* VMDiskImage.swift */; };
+		E0E36CD8A308547476D9F87F /* PhysicalDiskTopologyProof.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4144DE2FD3992B4562B3DBA2 /* PhysicalDiskTopologyProof.swift */; };
+		E52C6657A0042B2C60F39A71 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92826FDA1E4217204DBF26B2 /* AppModel.swift */; };
+		E566702B78EE0DB4E36B01A6 /* MacOnMacRawDiskDaemon in Resources */ = {isa = PBXBuildFile; fileRef = A3621634DB5B40162F3B425C /* MacOnMacRawDiskDaemon */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E5DB5E5A605A203EA184E843 /* BrokerProtocolContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82CA5EF2A4EC803190885D0 /* BrokerProtocolContract.swift */; };
+		E75B6F74BCC8819EAD491593 /* VMDiskImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2AB373C0424051C16BDC0 /* VMDiskImage.swift */; };
+		E7C1CA916F38DC0AED9E66A5 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A9C339BEBEDDD4D9A008EB /* main.swift */; };
+		F475B78F463D2C947E8533EF /* GuestToolsProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC7779B7C5B00F2E7A1B2E9 /* GuestToolsProtocol.swift */; };
+		F4ABB9E72CEC0F5B808A19A0 /* StorageDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D949F51FAFA7C80AAC1BC61D /* StorageDevice.swift */; };
+		F913A4DB09D23FFDEF3E1703 /* VMBackendTrust.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4FD7037C4C02CB54AD89573 /* VMBackendTrust.swift */; };
+		FB031E5A88353E33D10FD60F /* MacOSInstallationDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598B4B7DFA0F7090B0446D74 /* MacOSInstallationDetector.swift */; };
+		FDF1A49F7599D072634D1E3F /* DiskAccessContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474D42C8625AE97010BAE9F8 /* DiskAccessContract.swift */; };
+		FE4610D811B5921ECE8E3462 /* PhysicalDiskTopologyProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F1164BFF0AAD74B712A61C /* PhysicalDiskTopologyProbe.swift */; };
+		FFF983CFF170B26609D250C1 /* VMHardware.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092E293F611F4AB53E0B9669 /* VMHardware.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		326C4AC151870556A58D26C2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 677FA3DEEF4E74D0E326231A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A11242496E68D2D958850978;
+			remoteInfo = MacOnMacRawDiskDaemon;
+		};
+		B6833E728618A0212B35C3C4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 677FA3DEEF4E74D0E326231A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A5985E8DBB24363CC2A95D6F;
+			remoteInfo = MacOnMacDiskBroker;
+		};
+		F930C94DF779ADAC0741627B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 677FA3DEEF4E74D0E326231A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 98D3EAC376B42233258BD139;
+			remoteInfo = MacOnMacVMControl;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		63011AA45C535606D8416650 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolderSpec = 16;
+			files = (
+				042F5F2486C071D21D2B268E /* MacOnMacDiskBroker.xpc in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		069691FDE6F1D11CB6D9CA09 /* WorkspaceComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceComponents.swift; sourceTree = "<group>"; };
+		092E293F611F4AB53E0B9669 /* VMHardware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMHardware.swift; sourceTree = "<group>"; };
+		1FD461E9CC2FE3796209A141 /* PhysicalDiskPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhysicalDiskPreflight.swift; sourceTree = "<group>"; };
+		286498E4E85DB19F6711DC3B /* VMRuntimeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMRuntimeService.swift; sourceTree = "<group>"; };
+		2AB69D9E98DCFE4FDCBE9A3B /* VMRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMRegistry.swift; sourceTree = "<group>"; };
+		2EB485ACEA6A57ABBD809610 /* MacOnMacVMControl */ = {isa = PBXFileReference; includeInIndex = 0; path = MacOnMacVMControl; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F4CEB9F82082089B8371825 /* PhysicalDiskSafetyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhysicalDiskSafetyPolicy.swift; sourceTree = "<group>"; };
+		3727E97007B564A4C52E17A5 /* TaskDispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDispatchQueue.swift; sourceTree = "<group>"; };
+		39837CDA93FA23DEC0536D74 /* VMQEMUService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMQEMUService.swift; sourceTree = "<group>"; };
+		3DC7779B7C5B00F2E7A1B2E9 /* GuestToolsProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestToolsProtocol.swift; sourceTree = "<group>"; };
+		4144DE2FD3992B4562B3DBA2 /* PhysicalDiskTopologyProof.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhysicalDiskTopologyProof.swift; sourceTree = "<group>"; };
+		474D42C8625AE97010BAE9F8 /* DiskAccessContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskAccessContract.swift; sourceTree = "<group>"; };
+		48893E5306A3C5CF320BFE4F /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonBrokerContract.swift; sourceTree = "<group>"; };
+		598B4B7DFA0F7090B0446D74 /* MacOSInstallationDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSInstallationDetector.swift; sourceTree = "<group>"; };
+		5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerAuthorizationPolicy.swift; sourceTree = "<group>"; };
+		5B0ACA4D938EEA52F5FA3AF6 /* HostGuestExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostGuestExchange.swift; sourceTree = "<group>"; };
+		5DE2AB373C0424051C16BDC0 /* VMDiskImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMDiskImage.swift; sourceTree = "<group>"; };
+		6080AEFE70DF37E0A9500AE8 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		6707CF611011A6EA954D9789 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		6FD56A700CE70FE13B9BAE98 /* VMConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMConsoleView.swift; sourceTree = "<group>"; };
+		767F1A7461657219DB177BDE /* DiskutilProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskutilProcess.swift; sourceTree = "<group>"; };
+		8203070DAFCE9E7474056247 /* VMControlContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMControlContract.swift; sourceTree = "<group>"; };
+		83EA2DFB6E187F9EA2EFAC51 /* VMWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMWorkspaceView.swift; sourceTree = "<group>"; };
+		8540A5CB8020E2AB64F544E0 /* CompatibilityEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompatibilityEngine.swift; sourceTree = "<group>"; };
+		86559D2A04663F65AAE436AA /* VMConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMConnectivity.swift; sourceTree = "<group>"; };
+		88A9C339BEBEDDD4D9A008EB /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		89D40745BBA05D7A0442C4D5 /* MacOnMacDiskBroker.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = MacOnMacDiskBroker.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		89D58ACD25C2763022863959 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
+		92826FDA1E4217204DBF26B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		936466857FC93CEF8B8788E9 /* VMReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMReadiness.swift; sourceTree = "<group>"; };
+		A3621634DB5B40162F3B425C /* MacOnMacRawDiskDaemon */ = {isa = PBXFileReference; includeInIndex = 0; path = MacOnMacRawDiskDaemon; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0747D2D75B16061FB9F7BAE /* VolumeBootApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBootApp.swift; sourceTree = "<group>"; };
+		B4FD7037C4C02CB54AD89573 /* VMBackendTrust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMBackendTrust.swift; sourceTree = "<group>"; };
+		B82CA5EF2A4EC803190885D0 /* BrokerProtocolContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerProtocolContract.swift; sourceTree = "<group>"; };
+		BA20580736D0655569EFACC4 /* APFSInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APFSInspector.swift; sourceTree = "<group>"; };
+		CBDB161A91F43190CE394421 /* MacOnMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacOnMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMGuest.swift; sourceTree = "<group>"; };
+		CFF3337EEC50EB6526DED1A8 /* PrivilegedBrokerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegedBrokerClient.swift; sourceTree = "<group>"; };
+		D2F1164BFF0AAD74B712A61C /* PhysicalDiskTopologyProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhysicalDiskTopologyProbe.swift; sourceTree = "<group>"; };
+		D3F64F212CF26C8A2963A079 /* VMDiskImagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VMDiskImagesView.swift; sourceTree = "<group>"; };
+		D949F51FAFA7C80AAC1BC61D /* StorageDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageDevice.swift; sourceTree = "<group>"; };
+		E4F7D92D060D8D9ED111F0B0 /* DiskBrokerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskBrokerClient.swift; sourceTree = "<group>"; };
+		F187B0DF0653F4D8E8DCE088 /* DeviceInventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceInventoryService.swift; sourceTree = "<group>"; };
+		FD4F9088ABFE5D0FC9B7609B /* DiskLeaseStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskLeaseStateMachine.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		18121F31DD3100A4B1A74F7A = {
+			isa = PBXGroup;
+			children = (
+				308C93E936CB43C447AC3612 /* App */,
+				234041530EC9674EC793B0F4 /* Core */,
+				698AACD7F037E392324F0858 /* VMControlDaemon */,
+				9FD0E637BF4AE6E0F8DACE98 /* VolumeBootDiskBroker */,
+				592F7D9A0837991B37DE5B5B /* VolumeBootRawDiskDaemon */,
+				FD04C2AD6FF5CA2B64409EC9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		234041530EC9674EC793B0F4 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				BA20580736D0655569EFACC4 /* APFSInspector.swift */,
+				5A4F18AE42A9DDCC124353D7 /* BrokerAuthorizationPolicy.swift */,
+				B82CA5EF2A4EC803190885D0 /* BrokerProtocolContract.swift */,
+				8540A5CB8020E2AB64F544E0 /* CompatibilityEngine.swift */,
+				4E43B573E0F13813C221B292 /* DaemonBrokerContract.swift */,
+				F187B0DF0653F4D8E8DCE088 /* DeviceInventoryService.swift */,
+				89D58ACD25C2763022863959 /* Diagnostics.swift */,
+				474D42C8625AE97010BAE9F8 /* DiskAccessContract.swift */,
+				E4F7D92D060D8D9ED111F0B0 /* DiskBrokerClient.swift */,
+				FD4F9088ABFE5D0FC9B7609B /* DiskLeaseStateMachine.swift */,
+				767F1A7461657219DB177BDE /* DiskutilProcess.swift */,
+				3DC7779B7C5B00F2E7A1B2E9 /* GuestToolsProtocol.swift */,
+				5B0ACA4D938EEA52F5FA3AF6 /* HostGuestExchange.swift */,
+				598B4B7DFA0F7090B0446D74 /* MacOSInstallationDetector.swift */,
+				1FD461E9CC2FE3796209A141 /* PhysicalDiskPreflight.swift */,
+				2F4CEB9F82082089B8371825 /* PhysicalDiskSafetyPolicy.swift */,
+				4144DE2FD3992B4562B3DBA2 /* PhysicalDiskTopologyProof.swift */,
+				CFF3337EEC50EB6526DED1A8 /* PrivilegedBrokerClient.swift */,
+				D949F51FAFA7C80AAC1BC61D /* StorageDevice.swift */,
+				3727E97007B564A4C52E17A5 /* TaskDispatchQueue.swift */,
+				B4FD7037C4C02CB54AD89573 /* VMBackendTrust.swift */,
+				86559D2A04663F65AAE436AA /* VMConnectivity.swift */,
+				8203070DAFCE9E7474056247 /* VMControlContract.swift */,
+				5DE2AB373C0424051C16BDC0 /* VMDiskImage.swift */,
+				CD615E5DCC54EEFFFB7488A4 /* VMGuest.swift */,
+				092E293F611F4AB53E0B9669 /* VMHardware.swift */,
+				39837CDA93FA23DEC0536D74 /* VMQEMUService.swift */,
+				936466857FC93CEF8B8788E9 /* VMReadiness.swift */,
+				2AB69D9E98DCFE4FDCBE9A3B /* VMRegistry.swift */,
+				286498E4E85DB19F6711DC3B /* VMRuntimeService.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		308C93E936CB43C447AC3612 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				92826FDA1E4217204DBF26B2 /* AppModel.swift */,
+				48893E5306A3C5CF320BFE4F /* DashboardView.swift */,
+				6FD56A700CE70FE13B9BAE98 /* VMConsoleView.swift */,
+				D3F64F212CF26C8A2963A079 /* VMDiskImagesView.swift */,
+				83EA2DFB6E187F9EA2EFAC51 /* VMWorkspaceView.swift */,
+				B0747D2D75B16061FB9F7BAE /* VolumeBootApp.swift */,
+				069691FDE6F1D11CB6D9CA09 /* WorkspaceComponents.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		592F7D9A0837991B37DE5B5B /* VolumeBootRawDiskDaemon */ = {
+			isa = PBXGroup;
+			children = (
+				6707CF611011A6EA954D9789 /* main.swift */,
+				D2F1164BFF0AAD74B712A61C /* PhysicalDiskTopologyProbe.swift */,
+			);
+			name = VolumeBootRawDiskDaemon;
+			path = Privileged/VolumeBootRawDiskDaemon;
+			sourceTree = "<group>";
+		};
+		698AACD7F037E392324F0858 /* VMControlDaemon */ = {
+			isa = PBXGroup;
+			children = (
+				6080AEFE70DF37E0A9500AE8 /* main.swift */,
+			);
+			name = VMControlDaemon;
+			path = Tools/VMControlDaemon;
+			sourceTree = "<group>";
+		};
+		9FD0E637BF4AE6E0F8DACE98 /* VolumeBootDiskBroker */ = {
+			isa = PBXGroup;
+			children = (
+				88A9C339BEBEDDD4D9A008EB /* main.swift */,
+			);
+			name = VolumeBootDiskBroker;
+			path = Helpers/VolumeBootDiskBroker;
+			sourceTree = "<group>";
+		};
+		FD04C2AD6FF5CA2B64409EC9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CBDB161A91F43190CE394421 /* MacOnMac.app */,
+				89D40745BBA05D7A0442C4D5 /* MacOnMacDiskBroker.xpc */,
+				A3621634DB5B40162F3B425C /* MacOnMacRawDiskDaemon */,
+				2EB485ACEA6A57ABBD809610 /* MacOnMacVMControl */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3C045E2670D651A75EE5F8F7 /* MacOnMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 70F49C656BD9EA7119D424C3 /* Build configuration list for PBXNativeTarget "MacOnMac" */;
+			buildPhases = (
+				350D5470125DC832376B90A4 /* Sources */,
+				0278831907C8CD36F9FF19C4 /* Resources */,
+				63011AA45C535606D8416650 /* CopyFiles */,
+				0E7CC1B9FC1932C973BD5409 /* Bundle signed launchd daemon */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1FEAF5B878AA222626E302D /* PBXTargetDependency */,
+				5EC95A6A21D9491ED610D1DE /* PBXTargetDependency */,
+				6673F0727E8E1C02FC278726 /* PBXTargetDependency */,
+			);
+			name = MacOnMac;
+			packageProductDependencies = (
+			);
+			productName = MacOnMac;
+			productReference = CBDB161A91F43190CE394421 /* MacOnMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		98D3EAC376B42233258BD139 /* MacOnMacVMControl */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CEB5B2CF232CF5545ED19DEE /* Build configuration list for PBXNativeTarget "MacOnMacVMControl" */;
+			buildPhases = (
+				1E1583E60F998605215446AA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MacOnMacVMControl;
+			packageProductDependencies = (
+			);
+			productName = MacOnMacVMControl;
+			productReference = 2EB485ACEA6A57ABBD809610 /* MacOnMacVMControl */;
+			productType = "com.apple.product-type.tool";
+		};
+		A11242496E68D2D958850978 /* MacOnMacRawDiskDaemon */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2A8546C779A306D803752AFF /* Build configuration list for PBXNativeTarget "MacOnMacRawDiskDaemon" */;
+			buildPhases = (
+				780F93F0650F09DE9F25309B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MacOnMacRawDiskDaemon;
+			packageProductDependencies = (
+			);
+			productName = MacOnMacRawDiskDaemon;
+			productReference = A3621634DB5B40162F3B425C /* MacOnMacRawDiskDaemon */;
+			productType = "com.apple.product-type.tool";
+		};
+		A5985E8DBB24363CC2A95D6F /* MacOnMacDiskBroker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B06CB63F07256A14C7D87C2E /* Build configuration list for PBXNativeTarget "MacOnMacDiskBroker" */;
+			buildPhases = (
+				72CDBE0FD15FD82202C8EBDC /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MacOnMacDiskBroker;
+			packageProductDependencies = (
+			);
+			productName = MacOnMacDiskBroker;
+			productReference = 89D40745BBA05D7A0442C4D5 /* MacOnMacDiskBroker.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		677FA3DEEF4E74D0E326231A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					3C045E2670D651A75EE5F8F7 = {
+						DevelopmentTeam = "";
+					};
+					98D3EAC376B42233258BD139 = {
+						DevelopmentTeam = "";
+					};
+					A11242496E68D2D958850978 = {
+						DevelopmentTeam = "";
+					};
+					A5985E8DBB24363CC2A95D6F = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = 29311D0AA550CFF84869EED4 /* Build configuration list for PBXProject "MacOnMac" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 18121F31DD3100A4B1A74F7A;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FD04C2AD6FF5CA2B64409EC9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3C045E2670D651A75EE5F8F7 /* MacOnMac */,
+				A5985E8DBB24363CC2A95D6F /* MacOnMacDiskBroker */,
+				A11242496E68D2D958850978 /* MacOnMacRawDiskDaemon */,
+				98D3EAC376B42233258BD139 /* MacOnMacVMControl */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0278831907C8CD36F9FF19C4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E566702B78EE0DB4E36B01A6 /* MacOnMacRawDiskDaemon in Resources */,
+				81BF08E5F950A124C6825112 /* MacOnMacVMControl in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0E7CC1B9FC1932C973BD5409 /* Bundle signed launchd daemon */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle signed launchd daemon";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nOUT=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}\"\nmkdir -p \"${OUT}/MacOS\" \"${OUT}/Library/LaunchDaemons\"\ncp \"${BUILT_PRODUCTS_DIR}/MacOnMacRawDiskDaemon\" \"${OUT}/MacOS/VolumeBootRawDiskDaemon\"\ncp \"${SRCROOT}/Resources/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist\" \"${OUT}/Library/LaunchDaemons/ca.zensoftware.MacOnMac.RawDiskBroker.plist\"\ncp \"${BUILT_PRODUCTS_DIR}/MacOnMacVMControl\" \"${OUT}/MacOS/MacOnMacVMControl\"\nmkdir -p \"${OUT}/Library/LaunchAgents\"\ncp \"${SRCROOT}/Resources/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist\" \"${OUT}/Library/LaunchAgents/ca.zensoftware.MacOnMac.VMControl.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1E1583E60F998605215446AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F913A4DB09D23FFDEF3E1703 /* VMBackendTrust.swift in Sources */,
+				D5E8BE3E11A890600456E738 /* VMConnectivity.swift in Sources */,
+				2B123C48961C73624C875E29 /* VMControlContract.swift in Sources */,
+				DF615A888ADED869D5E7C1BA /* VMDiskImage.swift in Sources */,
+				9887ACB7E6B055594EA2F77B /* VMGuest.swift in Sources */,
+				2B85D6AF736326C6A1A66824 /* VMHardware.swift in Sources */,
+				A128BACB3BEF07C5CA584340 /* VMRegistry.swift in Sources */,
+				9F6F28D733925EBFB14CA656 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		350D5470125DC832376B90A4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7576FD32BC0270F2E2451CD6 /* APFSInspector.swift in Sources */,
+				E52C6657A0042B2C60F39A71 /* AppModel.swift in Sources */,
+				9722673795E72EA0BDAD4F40 /* BrokerAuthorizationPolicy.swift in Sources */,
+				022128B72A779F4EC6DC79DA /* BrokerProtocolContract.swift in Sources */,
+				5CDA92D9238CA903F5F2078D /* CompatibilityEngine.swift in Sources */,
+				37EBB112178688958C95E147 /* DaemonBrokerContract.swift in Sources */,
+				8A66B5BE6BCD5E3F053368DA /* DashboardView.swift in Sources */,
+				87B5B79FB378D5026A026435 /* DeviceInventoryService.swift in Sources */,
+				60156FCF965602D17D414559 /* Diagnostics.swift in Sources */,
+				FDF1A49F7599D072634D1E3F /* DiskAccessContract.swift in Sources */,
+				B5381242BAA82AADEE237BF7 /* DiskBrokerClient.swift in Sources */,
+				36851D5FCF9275DF3A132390 /* DiskLeaseStateMachine.swift in Sources */,
+				68CB5F3FBD2997AD58DDC368 /* DiskutilProcess.swift in Sources */,
+				F475B78F463D2C947E8533EF /* GuestToolsProtocol.swift in Sources */,
+				3AA17B91A33747C7A9215E50 /* HostGuestExchange.swift in Sources */,
+				FB031E5A88353E33D10FD60F /* MacOSInstallationDetector.swift in Sources */,
+				98528D6A9EBEF79EDA8BCDE6 /* PhysicalDiskPreflight.swift in Sources */,
+				998A02D4DEC0D1282EE61E7C /* PhysicalDiskSafetyPolicy.swift in Sources */,
+				E0E36CD8A308547476D9F87F /* PhysicalDiskTopologyProof.swift in Sources */,
+				251CF780CBEF8EE75180F547 /* PrivilegedBrokerClient.swift in Sources */,
+				F4ABB9E72CEC0F5B808A19A0 /* StorageDevice.swift in Sources */,
+				728FF005460312C9AC53B621 /* TaskDispatchQueue.swift in Sources */,
+				75D66BBDCEAD748E391F14C8 /* VMBackendTrust.swift in Sources */,
+				CA862EED5DFC3EFEC8EC19B3 /* VMConnectivity.swift in Sources */,
+				16F79D84BF6CE02A99BBE9FA /* VMConsoleView.swift in Sources */,
+				46DE306FA40708C45DB485F1 /* VMControlContract.swift in Sources */,
+				E75B6F74BCC8819EAD491593 /* VMDiskImage.swift in Sources */,
+				318173E3F96E404701C00A28 /* VMDiskImagesView.swift in Sources */,
+				502374C8E99BA308C5762004 /* VMGuest.swift in Sources */,
+				FFF983CFF170B26609D250C1 /* VMHardware.swift in Sources */,
+				5DBB14E0090703006B892768 /* VMQEMUService.swift in Sources */,
+				0EE07B3527F19028C0A7E001 /* VMReadiness.swift in Sources */,
+				341F981DFDB63D66F0B6D5B7 /* VMRegistry.swift in Sources */,
+				A1677320DF7A63C0100C0B47 /* VMRuntimeService.swift in Sources */,
+				15630C301FE38049267559C2 /* VMWorkspaceView.swift in Sources */,
+				1F592A3DE0AE792A298F6159 /* VolumeBootApp.swift in Sources */,
+				6E415494AC7071D6E05F1FC4 /* WorkspaceComponents.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		72CDBE0FD15FD82202C8EBDC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5FE1FF230394D462CA6812F9 /* BrokerAuthorizationPolicy.swift in Sources */,
+				E5DB5E5A605A203EA184E843 /* BrokerProtocolContract.swift in Sources */,
+				E7C1CA916F38DC0AED9E66A5 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		780F93F0650F09DE9F25309B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4BAD1EE748D56F566397051A /* BrokerAuthorizationPolicy.swift in Sources */,
+				BEEA68B3455BEE8CE69D5E0A /* DaemonBrokerContract.swift in Sources */,
+				FE4610D811B5921ECE8E3462 /* PhysicalDiskTopologyProbe.swift in Sources */,
+				051BD8F460796F8128637615 /* PhysicalDiskTopologyProof.swift in Sources */,
+				10B891C883A134FC197E5ED2 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5EC95A6A21D9491ED610D1DE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A11242496E68D2D958850978 /* MacOnMacRawDiskDaemon */;
+			targetProxy = 326C4AC151870556A58D26C2 /* PBXContainerItemProxy */;
+		};
+		6673F0727E8E1C02FC278726 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 98D3EAC376B42233258BD139 /* MacOnMacVMControl */;
+			targetProxy = F930C94DF779ADAC0741627B /* PBXContainerItemProxy */;
+		};
+		C1FEAF5B878AA222626E302D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A5985E8DBB24363CC2A95D6F /* MacOnMacDiskBroker */;
+			targetProxy = B6833E728618A0212B35C3C4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		08BD039850D8EB41C284E7DF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				OTHER_CODE_SIGN_FLAGS = "--identifier ca.zensoftware.MacOnMac.RawDiskBroker";
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.RawDiskBroker;
+				PRODUCT_NAME = MacOnMacRawDiskDaemon;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		0A772024ED4C9CD38BB7C67E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.DiskBroker;
+				PRODUCT_NAME = MacOnMacDiskBroker;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		136BC19C6F6D355F4D9C4E3F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "MoM: MacOnMac";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac;
+				PRODUCT_NAME = MacOnMac;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		2DDD3A2CD0221580B2912E94 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = Resources/MacOnMac.entitlements;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		37EC15461CCECF1B4CD2E7E0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Helpers/VolumeBootDiskBroker/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.DiskBroker;
+				PRODUCT_NAME = MacOnMacDiskBroker;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		3D3564F7AE1151EA0780E9CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.VMControl;
+				PRODUCT_NAME = MacOnMacVMControl;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		51CC4C620A21FE969A18809E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				OTHER_CODE_SIGN_FLAGS = "--identifier ca.zensoftware.MacOnMac.RawDiskBroker";
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.RawDiskBroker;
+				PRODUCT_NAME = MacOnMacRawDiskDaemon;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		5567DA7F1EA2D6A51F59B4BC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_ENTITLEMENTS = Resources/MacOnMac.entitlements;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		796B2657DA43174CA2BC50C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac.VMControl;
+				PRODUCT_NAME = MacOnMacVMControl;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		CDE4114292C9DD2400D15984 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "MoM: MacOnMac";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.zensoftware.MacOnMac;
+				PRODUCT_NAME = MacOnMac;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		29311D0AA550CFF84869EED4 /* Build configuration list for PBXProject "MacOnMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2DDD3A2CD0221580B2912E94 /* Debug */,
+				5567DA7F1EA2D6A51F59B4BC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2A8546C779A306D803752AFF /* Build configuration list for PBXNativeTarget "MacOnMacRawDiskDaemon" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				08BD039850D8EB41C284E7DF /* Debug */,
+				51CC4C620A21FE969A18809E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		70F49C656BD9EA7119D424C3 /* Build configuration list for PBXNativeTarget "MacOnMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				136BC19C6F6D355F4D9C4E3F /* Debug */,
+				CDE4114292C9DD2400D15984 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B06CB63F07256A14C7D87C2E /* Build configuration list for PBXNativeTarget "MacOnMacDiskBroker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				37EC15461CCECF1B4CD2E7E0 /* Debug */,
+				0A772024ED4C9CD38BB7C67E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CEB5B2CF232CF5545ED19DEE /* Build configuration list for PBXNativeTarget "MacOnMacVMControl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				796B2657DA43174CA2BC50C0 /* Debug */,
+				3D3564F7AE1151EA0780E9CA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 677FA3DEEF4E74D0E326231A /* Project object */;
 }
