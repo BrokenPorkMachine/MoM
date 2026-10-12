@@ -95,3 +95,5 @@ Physical-disk attachment and descriptor grants are disabled in this release. The
 
 `./Scripts/verify.sh` runs the tests and a macOS Xcode compile.
 `./Scripts/verify-linux.sh` runs structural and cross-platform pure-Swift tests.
+
+Build the structured VM inventory/status tool with `Scripts/build-vm-cli.sh`; see `Docs/VM_LIFECYCLE_CLI.md`.
