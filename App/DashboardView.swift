@@ -174,6 +174,7 @@ struct DashboardView: View {
                     HStack {
                         Button("Check registration") { model.refreshPrivilegedDaemonStatus() }
                         Button("Request installation") { model.registerPrivilegedDaemon() }
+                        Button("Remove service") { model.unregisterPrivilegedDaemon() }
                         Button("Approval settings") { model.openPrivilegedDaemonApproval() }
                         Button("Test signed connection") { Task { await model.checkPrivilegedDaemon() } }
                             .disabled(model.privilegedDaemonBusy)

@@ -13,6 +13,8 @@ python3 Tests/ProjectStructureTests.py
 ./Scripts/test-task-dispatch.sh
 ./Scripts/test-disk-images.sh
 ./Scripts/test-workspace-lease.sh
+./Scripts/test-update-rollback.sh
+./Scripts/test-daemon-lifecycle.sh
 ./Scripts/test-arm-guests.sh
 ./Scripts/test-guest-host-e2e.sh
 ./Scripts/test-guest-tools-v2.sh

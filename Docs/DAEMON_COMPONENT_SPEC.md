@@ -9,6 +9,9 @@
 - Binary location: `VolumeBoot.app/Contents/MacOS/VolumeBootRawDiskDaemon`.
 - plist location: `VolumeBoot.app/Contents/Library/LaunchDaemons/ca.zensoftware.VolumeBoot.RawDiskBroker.plist`.
 - Registration: only on user interaction with `SMAppService.daemon(plistName:).register()`; approval is a separate OS-level step.
+- Removal: only on explicit administrator/user action through `SMAppService.unregister()`. Removal reports the resulting status and does not delete VM data or silently stop unrelated VM sessions.
+- Upgrade: the matching signed app and daemon are registered as a pair; approval-denied and registration failures remain visible and do not claim the service is healthy.
+- Health: registration status and the authenticated XPC `healthReport` are separate checks. A registered service is not treated as operational until the signed health request succeeds.
 
 ## Authentication
 - No caller-supplied PID, file path or team string used for identity.

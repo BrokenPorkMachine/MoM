@@ -6,6 +6,8 @@ The native workspace separates setup, console, hardware, disks, and network, wit
 
 **Virtual machines** installs and runs macOS from Apple IPSW files, ARM Linux from an AArch64 ISO using Apple Virtualization.framework, and Windows ARM from an ARM64 ISO using QEMU/HVF with persistent UEFI and TPM 2.0. Windows requires QEMU 9.2+ and swtpm. See [ARM guest setup](Docs/ARM_GUESTS.md).
 
+Administrators should follow the [managed update and rollback contract](Docs/UPDATE_ROLLBACK.md); application and daemon versions must be deployed together, while VM workspaces remain user data.
+
 **Virtual machines → Disks** creates, loads, attaches, detaches, deletes, and grows raw disk images, including selectable installation/boot images. **Console** adds mouse capture/release buttons, click capture, and a configurable release hotkey (Control + Option + Escape by default) for macOS/Linux. Windows uses QEMU’s console and Control + Option + G. See [disk image workflows](Docs/DISK_IMAGES.md) and [console controls](Docs/VM_CONSOLE.md).
 
 Run `Scripts/test-disk-images.sh` and `Scripts/test-arm-guests.sh` for disk workflows and native Linux/QEMU startup/shutdown checks. The latter requires macOS, QEMU, and swtpm; its synthetic ISO tests configuration and EFI/backend startup, not OS installation. Full OS installation and interactive console checks require your own compatible installer media.

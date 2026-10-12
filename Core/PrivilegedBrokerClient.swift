@@ -36,6 +36,13 @@ final class PrivilegedBrokerClient {
         return currentStatus()
     }
 
+    /// Explicitly removes the registered daemon. This is intentionally never
+    /// part of app shutdown or VM shutdown; administrators choose removal.
+    func unregister() throws -> String {
+        try service.unregister()
+        return currentStatus()
+    }
+
     func openApprovalSettings() { SMAppService.openSystemSettingsLoginItems() }
 
     func checkHealth() async throws -> String {

@@ -429,6 +429,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func unregisterPrivilegedDaemon() {
+        do {
+            privilegedDaemonStatus = try privilegedBroker.unregister()
+        } catch {
+            privilegedDaemonStatus = "Removal failed: \(error.localizedDescription)"
+        }
+    }
+
     func openPrivilegedDaemonApproval() { privilegedBroker.openApprovalSettings() }
 
     func checkPrivilegedDaemon() async {
