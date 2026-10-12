@@ -75,6 +75,10 @@ final class OSMediaDownloader {
     func downloadLatestMacOSRestoreImage(to destination: URL, progress: @escaping (Double) -> Void,
                                          completion: @escaping (Result<URL, Error>) -> Void) {
         cancel()
+        #if !arch(arm64)
+        completion(.failure(OSMediaDownloadError.appleCatalogueUnavailable("Apple Virtualization macOS restore images require Apple Silicon.")))
+        return
+        #else
         guard destination.isFileURL, destination.pathExtension.lowercased() == "ipsw" else {
             completion(.failure(OSMediaDownloadError.invalidDestination))
             return
@@ -141,5 +145,6 @@ final class OSMediaDownloader {
             }
             self?.task = nil
         }
+        #endif
     }
 }

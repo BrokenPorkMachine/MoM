@@ -36,6 +36,8 @@ The release pipeline must build and sign the distributable app and privileged he
 
 The available test host is Apple Silicon, arm64, macOS 27.0.1 (build 26A434), with Xcode 27.1 (27A9275), macOS 27.0 SDK, QEMU 11.1.2, and swtpm 0.10.2. The deployment target remains macOS 15.0. `Scripts/verify.sh` passed outside the restricted sandbox, including policy, disk-image, networking, guest-tool protocol, and 37 synthetic ARM guest checks. A clean Release build signed with the installed Apple Development certificate passed the daemon bundle gate with matching team `VC75Y3C6VP`, app identifier, daemon identifier, nested signatures, and designated requirements. This is a development-signed artifact, not a Developer ID distribution signature or notarized release; it still does not qualify any installed guest.
 
+The universal app also contains an x86_64 slice and can launch on Intel Macs. Apple Virtualization macOS restore/install and native ARM guest workflows remain unavailable on Intel; those operations fail closed with an unsupported-host result. Intel users should treat the public artifact as a UI/library and QEMU-oriented evaluation build.
+
 No `.ipsw` or `.iso` installer media was found in the repository or Downloads during this run. Consequently, for managed macOS, AArch64 Linux, and Windows ARM64, real install, login, reboot, guest-written disk persistence, guest networking, drivers, display, audio, and shutdown remain **not run**. macOS 15.x and 26.x hosts are also untested. The detailed per-guest results and repeatable evidence requirements are in [IMPLEMENTATION_MATRIX.md](IMPLEMENTATION_MATRIX.md).
 
 ## Current release policy

@@ -18,7 +18,11 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         }
     }
     private(set) var virtualMachine: VZVirtualMachine?
+    #if arch(arm64)
     private(set) var installer: VZMacOSInstaller?
+    #else
+    private var installer: AnyObject?
+    #endif
     var installationProgress: Double { installer?.progress.fractionCompleted ?? 0 }
     private(set) var currentFolder: URL?
     private var workspaceLease: VMWorkspaceLease?
