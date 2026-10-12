@@ -16,6 +16,32 @@ enum VMWorkspaceLeaseError: LocalizedError {
     }
 }
 
+/// Administrator policy loaded from the managed system location. Missing
+/// policy means no additional restriction; present policy is fail-closed.
+struct VMManagedPolicy: Codable {
+    var allowedStorageRoots: [String] = []
+    var maxCPUCount: Int?
+    var maxMemoryGiB: Int?
+    var allowMicrophone = true
+    var allowWritableShares = true
+    var allowGuestTools = true
+    var allowBridgedNetworking = false
+    var allowedExecutablePaths: [String] = []
+
+    static let path = "/Library/Application Support/MacOnMac/policy.json"
+    static func load() throws -> VMManagedPolicy {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else { return VMManagedPolicy() }
+        return try JSONDecoder().decode(VMManagedPolicy.self, from: Data(contentsOf: url))
+    }
+
+    func verifyHardware(_ settings: VMHardwareSettings) throws {
+        if let maxCPUCount, settings.cpuCount > maxCPUCount { throw VMHardwareError.invalidCPU }
+        if let maxMemoryGiB, settings.memoryGiB > maxMemoryGiB { throw VMHardwareError.invalidMemory }
+        guard allowMicrophone || !settings.microphoneEnabled else { throw VMHardwareError.policyDenied("microphone") }
+    }
+}
+
 /// Cross-process lease for every mutable file in a VM bundle. `flock` releases
 /// ownership automatically when the process exits, so a crashed owner does
 /// not leave a permanently stale lease file behind.
@@ -193,7 +219,7 @@ struct VMHardwareSettings: Codable, Equatable {
 
 enum VMHardwareError: LocalizedError {
     case unsupportedVersion, invalidCPU, invalidMemory, invalidName, tooManyDisks
-    case invalidDisk(String), duplicateDisk, protectedDisk, invalidFolder
+    case invalidDisk(String), duplicateDisk, protectedDisk, invalidFolder, policyDenied(String)
     var errorDescription: String? {
         switch self {
         case .unsupportedVersion: return "This hardware profile version is not supported."
@@ -205,6 +231,7 @@ enum VMHardwareError: LocalizedError {
         case .duplicateDisk: return "The same disk image cannot be attached more than once."
         case .protectedDisk: return "VM bundle files and device nodes cannot be additional disk images."
         case .invalidFolder: return "Select an existing VM directory outside the device tree."
+        case .policyDenied(let setting): return "An administrator policy disallows \(setting)."
         }
     }
 }

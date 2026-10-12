@@ -25,7 +25,7 @@ struct VMConnectivitySettings: Codable, Equatable {
 enum VMConnectivityError: Error, LocalizedError, Equatable {
     case missingBridgedInterface, invalidBridgedInterface, bridgedUnavailableInRelease
     case invalidSharedPath, shareNotDirectory, shareOverlapsVM, shareInDeviceTree
-    case unsupportedVersion
+    case unsupportedVersion, policyDenied(String)
     var errorDescription: String? {
         switch self {
         case .missingBridgedInterface: return "Select a physical interface for bridged networking"
@@ -36,12 +36,23 @@ enum VMConnectivityError: Error, LocalizedError, Equatable {
         case .shareOverlapsVM: return "Shared folder cannot be the VM bundle, contain it, or be contained by it"
         case .shareInDeviceTree: return "Raw device paths cannot be shared"
         case .unsupportedVersion: return "Unrecognized connectivity settings version"
+        case .policyDenied(let setting): return "An administrator policy disallows (setting)."
         }
     }
 }
 
 /// Pure policy checks usable without Virtualization.framework or a macOS SDK.
 enum VMConnectivityPolicy {
+    static func verifyManaged(_ settings: VMConnectivitySettings, hardware: VMHardwareSettings,
+                              policy: VMManagedPolicy, vmFolder: URL) throws {
+        guard policy.allowGuestTools || !settings.guestToolsEnabled else { throw VMConnectivityError.policyDenied("guest tools") }
+        guard policy.allowWritableShares || settings.shareReadOnly else { throw VMConnectivityError.policyDenied("writable shares") }
+        guard policy.allowBridgedNetworking || settings.networkMode != .bridged else { throw VMConnectivityError.policyDenied("bridged networking") }
+        guard policy.allowedStorageRoots.isEmpty || policy.allowedStorageRoots.contains(where: {
+            vmFolder.path.hasPrefix(URL(fileURLWithPath: $0).standardized.path + "/")
+        }) else { throw VMConnectivityError.policyDenied("VM storage location") }
+    }
+
     static func verify(_ settings: VMConnectivitySettings, vmFolder: URL, validInterfaces: Set<String> = []) throws {
         guard settings.version == 1 else { throw VMConnectivityError.unsupportedVersion }
         if settings.networkMode == .bridged {

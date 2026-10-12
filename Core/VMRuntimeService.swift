@@ -76,6 +76,9 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         let connectivity = try VMConnectivityStore.load(from: folder)
         if connectivity.guestToolsEnabled { try HostGuestExchange.createIfNeeded(in: folder) }
         let hardware = try VMHardwareStore.load(from: folder)
+        let managedPolicy = try VMManagedPolicy.load()
+        try managedPolicy.verifyHardware(hardware)
+        try VMConnectivityPolicy.verifyManaged(connectivity, hardware: hardware, policy: managedPolicy, vmFolder: folder)
         try VMHardwarePolicy.verify(hardware, vmFolder: folder,
             cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
@@ -286,6 +289,9 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         try VMHardwarePolicy.verify(hardware, vmFolder: folder,
             cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / VMDiskImageStore.gibibyte))
+        let managedPolicy = try VMManagedPolicy.load()
+        try managedPolicy.verifyHardware(hardware)
+        try VMConnectivityPolicy.verifyManaged(connectivity, hardware: hardware, policy: managedPolicy, vmFolder: folder)
         try VMConnectivityPolicy.verify(connectivity, vmFolder: folder,
             validInterfaces: Set(VZBridgedNetworkInterface.networkInterfaces.map(\.identifier)))
         if guestOS == .windowsARM {
