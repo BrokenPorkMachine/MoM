@@ -46,6 +46,18 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
         .animation(.easeInOut(duration: 0.16), value: section)
         .onChange(of: model.vmRevision) { _, _ in if model.vm.hasSession { section = .console } }
         .onChange(of: model.vmFolderPath) { _, _ in if !model.vm.hasSession { section = .overview } }
+        .alert("Approve Windows backend executable?", isPresented: Binding(
+            get: { model.backendApprovalRequest != nil },
+            set: { if !$0 { model.cancelBackendExecutableApproval() } }
+        )) {
+            Button("Trust this exact file") { model.approveBackendExecutable(persistently: true) }
+            Button("Allow once") { model.approveBackendExecutable(persistently: false) }
+            Button("Cancel", role: .cancel) { model.cancelBackendExecutableApproval() }
+        } message: {
+            if let identity = model.backendApprovalRequest {
+                Text("This VM workspace requests the \(identity.kind.rawValue) executable at:\n\n\(identity.path)\n\nSHA-256: \(identity.sha256)\n\nMacOnMac will check the backend version before launch. Approval applies to these exact file contents. A changed executable requires approval again.")
+            }
+        }
     }
 
     private var header: some View {
@@ -198,7 +210,7 @@ struct VMWorkspaceView<Hardware: View, Network: View>: View {
                     .font(.callout).foregroundStyle(.secondary)
             }.padding(.horizontal, 3).padding(.top, 4)
 
-            WorkspaceCard(title: "01  ·  Choose a guest", subtitle: "Native Apple virtualization for macOS and Linux; QEMU for Windows ARM.") {
+            WorkspaceCard(title: "01  ·  Choose a guest", subtitle: "Evaluation preview: guest installation and host-version qualification are still pending. See the release support matrix.") {
                 HStack(spacing: 10) {
                     ForEach(VMGuestOS.allCases) { guest in
                         GuestChoiceCard(guest: guest, selected: model.guestOS == guest) {

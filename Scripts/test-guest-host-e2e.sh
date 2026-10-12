@@ -16,14 +16,19 @@ VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" status > "$TEMP/guest.log
 VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" inbox | grep -q 'host hello'
 VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" send 'guest hello' > /dev/null
 "$TEMP/host-tool" "$VM" inbox | grep -q 'guest hello'
-printf 'test transfer\n' > "$TEMP/sample.txt"
-"$TEMP/host-tool" "$VM" push "$TEMP/sample.txt" > /dev/null
-VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" files | grep -q '\.txt'
-VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" push "$TEMP/sample.txt" > /dev/null
-"$TEMP/host-tool" "$VM" guest-files | grep -q '\.txt'
-# New protocol exercises authenticated ping and manually accepted clipboard offers.
+# File receipts are authenticated, so pair before either side stages or receives files.
 PAIR_CODE="$("$TEMP/host-tool" "$VM" pair-init | awk '{print $NF}')"
 VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" "$TEMP/guest-agent" pair "$PAIR_CODE" > /dev/null
+printf 'test transfer\n' > "$TEMP/sample.txt"
+"$TEMP/host-tool" "$VM" push "$TEMP/sample.txt" > /dev/null
+VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" files | grep -q 'sample.txt'
+mkdir "$TEMP/received"
+TRANSFER_ID="$(VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" files | awk 'NR == 1 {print $1}')"
+VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" receive "$TRANSFER_ID" "$TEMP/received" > /dev/null
+cmp "$TEMP/sample.txt" "$TEMP/received/sample.txt"
+VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" push "$TEMP/sample.txt" > /dev/null
+"$TEMP/host-tool" "$VM" guest-files | grep -q 'sample.txt'
+# New protocol exercises authenticated ping and manually accepted clipboard offers.
 "$TEMP/host-tool" "$VM" ping > /dev/null
 VOLUMEBOOT_GUEST_KEY_FILE="$TEMP/guest-pairing.key" VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" poll-once > /dev/null
 "$TEMP/host-tool" "$VM" replies | grep -q pong
@@ -34,4 +39,4 @@ VOLUMEBOOT_EXCHANGE="$VM/Exchange" "$TEMP/guest-agent" clipboard-send 'guest cli
 "$TEMP/host-tool" "$VM" diagnose | grep -q 'Authenticated responses: 1'
 TRANSFER_RECEIPT="$(find "$VM/Exchange/host-files" -type f -name '*.transfer.json' -print | head -1)"
 test -n "$TRANSFER_RECEIPT" && test -f "$TRANSFER_RECEIPT"
-echo 'PASS: agent heartbeat, signed request/reply, clipboard offers, messages, staged files and receipts' 
+echo 'PASS: agent heartbeat, authenticated requests/replies and transfer receipts, streamed receive, clipboard offers, and messages'

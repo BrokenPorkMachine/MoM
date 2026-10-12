@@ -30,4 +30,4 @@ This is a specification, not a claim of implemented production functionality. Th
 
 ## v0.15.0: Network and guest integration
 
-See `NETWORKING.md` and `GUEST_HOST_TOOLS.md`. NAT is the default; optional bridging requires a suitable entitlement. VirtioFS sharing and the guest data exchange require an explicit opt-in. The file exchange is not a privileged management protocol; no inbound command execution is implemented. Full macOS validation remains outstanding.
+See `NETWORKING.md`, `GUEST_HOST_TOOLS.md`, and `SUPPORT_MATRIX.md`. NAT is the default; bridged networking and physical disk grants are disabled in this release. VirtioFS sharing and guest data exchange require explicit opt-in and remain evaluation features. The file exchange is not a privileged management protocol; no inbound command execution is implemented. Full macOS validation remains outstanding.

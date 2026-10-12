@@ -40,23 +40,26 @@ final class AppModel: ObservableObject {
     @Published private(set) var validationIssues: [String] = []
     @Published private(set) var validationSummary: String?
     @Published private(set) var workspaceRevision = 0
+    @Published private(set) var backendApprovalRequest: VMBackendExecutableIdentity?
     private var loadedFolderPath: String?
     private var savedHardware: VMHardwareSettings?
     private var savedConnectivity: VMConnectivitySettings?
     private let preferences: (any VMPreferences)?
+    private let backendTrustStore = VMBackendExecutableTrustStore.shared
+    private var pendingBackendAction: BackendApprovalAction?
     private var recentPaths: [String] = []
+
+    private enum BackendApprovalAction { case start, provision }
     @Published private(set) var diskImageStatus = "Choose a VM folder to manage its disk images"
     @Published private(set) var diskRevision = 0
     @Published var hardware = VMHardwareSettings.default
     @Published private(set) var hardwareStatus = "Choose a VM to edit its hardware"
     @Published private(set) var hardwareLoaded = false
-    @Published private(set) var diskPreflightStatus = "Select a device to inspect physical attachment eligibility."
+    @Published private(set) var diskPreflightStatus = "Select a host disk for read-only metadata diagnostics."
     @Published private(set) var diskPreflightRunning = false
     private let diskPreflight = PhysicalDiskPreflight()
     private let diskBrokerClient = DiskBrokerClient()
     private let privilegedBroker = PrivilegedBrokerClient()
-    @Published var attachDisposableDisk = false
-    private var activeDiskGrant: PrivilegedDiskGrant?
     @Published private(set) var privilegedDaemonStatus = "Not checked"
     @Published private(set) var privilegedDaemonDiagnostic = "Not connected"
     @Published private(set) var privilegedDaemonBusy = false
@@ -70,6 +73,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var connectivityStatus = "NAT by default. Save settings before starting an installed VM."
     @Published var outgoingMessage = ""
     @Published private(set) var guestMessages: [VBExchangeMessage] = []
+    @Published private(set) var guestTransfers: [VBVerifiedTransfer] = []
     @Published private(set) var guestHeartbeat: VBGuestHeartbeat?
     @Published private(set) var exchangeStatus = "Guest tools disabled"
     @Published private(set) var transferProgress: Double = 0
@@ -85,8 +89,6 @@ final class AppModel: ObservableObject {
             .map { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath().path }
         vm.onExternalStateChange = { [weak self] status in
             guard let self else { return }
-            self.activeDiskGrant?.releaseAfterVMStops()
-            self.activeDiskGrant = nil
             self.shutdownRequested = false
             self.vmStatus = status
             self.vmRevision += 1
@@ -149,9 +151,9 @@ final class AppModel: ObservableObject {
         restoreImagePath = ""; installationISOPath = ""; windowsDriverISOPath = ""
         qemuExecutablePath = ""; swtpmExecutablePath = ""
         windowsFirmwareCodePath = ""; windowsFirmwareVariablesPath = ""
-        attachDisposableDisk = false; vmFailure = nil; vmStatus = "Configure a new virtual machine"
+        vmFailure = nil; vmStatus = "Configure a new virtual machine"
         validationIssues = []; validationSummary = nil
-        outgoingMessage = ""; guestMessages = []; guestHeartbeat = nil; pairingCode = ""
+        outgoingMessage = ""; guestMessages = []; guestTransfers = []; guestHeartbeat = nil; pairingCode = ""
         hardwareStatus = "New VM hardware applies during installation"
         connectivityStatus = "NAT by default. Settings apply during installation."
         diskImageStatus = "Choose a workspace destination before attaching disk images"
@@ -169,7 +171,7 @@ final class AppModel: ObservableObject {
             hardware.keyboard = .usb; hardware.pointer = .mouse; connectivity.guestToolsEnabled = false
         }
         if guest == .windowsARM {
-            attachDisposableDisk = false; hardware.microphoneEnabled = false
+            hardware.microphoneEnabled = false
             connectivity.sharedFolderPath = nil
             if connectivity.networkMode == .bridged { connectivity.networkMode = .nat }
         }
@@ -180,7 +182,6 @@ final class AppModel: ObservableObject {
         selectedManifest = record
         loadedFolderPath = folder.path
         guestOS = record.guestOS
-        if guestOS == .windowsARM { attachDisposableDisk = false }
         installationISOPath = record.installationMediaPath ?? ""
         windowsDriverISOPath = record.driverMediaPath ?? ""
         qemuExecutablePath = record.qemu?.executablePath ?? ""
@@ -222,7 +223,12 @@ final class AppModel: ObservableObject {
             // Load everything before publishing any selection: failures preserve the previous VM.
             let record = try VMRegistry.read(at: folder)
             let nextHardware = try VMHardwareStore.load(from: folder)
-            let nextConnectivity = try VMConnectivityStore.load(from: folder)
+            var nextConnectivity = try VMConnectivityStore.load(from: folder)
+            let disabledBridgeProfile = nextConnectivity.networkMode == .bridged && !ReleaseFeaturePolicy.bridgedNetworkingEnabled
+            if disabledBridgeProfile {
+                nextConnectivity.networkMode = .nat
+                nextConnectivity.bridgedInterfaceID = nil
+            }
             vmFolderPath = folder.path
             hardware = nextHardware; savedHardware = nextHardware
             connectivity = nextConnectivity; savedConnectivity = nextConnectivity
@@ -230,12 +236,13 @@ final class AppModel: ObservableObject {
             hardwareLoaded = true
             hardwareStatus = "Hardware profile loaded for \(folder.lastPathComponent)"
             loadGuestDetails(from: folder, record: record)
-            connectivityStatus = "Loaded VM connectivity profile"
+            connectivityStatus = disabledBridgeProfile
+                ? "Loaded profile with bridged networking disabled in this release; NAT selected. Save the profile to keep this setting."
+                : "Loaded VM connectivity profile"
             vmFailure = nil; vmStatus = "\(record.guestOS.title) selected · \(record.state.rawValue)"
             validationIssues = []; validationSummary = nil
             windowsFirmwareCodePath = ""; windowsFirmwareVariablesPath = ""
             outgoingMessage = ""; pairingCode = ""; diskRevision += 1
-            attachDisposableDisk = false
             workspaceRevision += 1
             recentPaths.removeAll { $0 == folder.path }
             recentPaths.insert(folder.path, at: 0)
@@ -272,16 +279,20 @@ final class AppModel: ObservableObject {
     }
 
     func refreshExchange() {
-        guard vmFolderPath.hasPrefix("/") else { guestMessages = []; guestHeartbeat = nil; return }
+        guard vmFolderPath.hasPrefix("/") else { guestMessages = []; guestTransfers = []; guestHeartbeat = nil; return }
         let folder = URL(fileURLWithPath: vmFolderPath)
         guestMessages = HostGuestExchange.receive(for: "host", in: folder)
         guestHeartbeat = HostGuestExchange.guestHeartbeat(in: folder)
+        let root = HostGuestExchange.root(for: folder)
+        if let key = try? VBPairing.load(VBPairing.hostKeyPath(folder)) {
+            guestTransfers = VBGuestToolsTransport.verifiedTransfers(origin: "guest", root: root, key: key)
+        } else { guestTransfers = [] }
         let age = guestHeartbeat.map { Int(max(0, Date().timeIntervalSince($0.timestamp))) }
         networkHealth = "Profile: \(connectivity.networkMode.rawValue.uppercased()) · Guest heartbeat: \(age.map { "\($0)s ago" } ?? "unavailable") · Actual DHCP/internet connectivity not established"
         if let key = try? VBPairing.load(VBPairing.hostKeyPath(folder)) {
             let replies = VBGuestToolsTransport.verifiedReplies(root: HostGuestExchange.root(for: folder), key: key)
             authenticatedStatus = replies.first.map { "Authenticated guest response: \($0.detail)" } ?? "Paired; no authenticated response yet"
-        } else { authenticatedStatus = "Not paired; only signed ping/status requests require pairing" }
+        } else { authenticatedStatus = "Not paired; pair to authenticate file transfers and guest requests" }
     }
 
     func sendHostMessage() {
@@ -299,11 +310,13 @@ final class AppModel: ObservableObject {
         transferInProgress = true
         transferProgress = 0
         let root = HostGuestExchange.root(for: URL(fileURLWithPath: vmFolderPath))
+        let folder = URL(fileURLWithPath: vmFolderPath)
         Task.detached(priority: .utility) { [weak self] in
             guard let model = self else { return }
             do {
                 var lastProgressUpdate = Date.distantPast
-                let receipt = try VBGuestToolsTransport.stageFile(url, origin: "host", root: root) { fraction in
+                let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
+                let receipt = try VBGuestToolsTransport.stageFile(url, origin: "host", root: root, key: key) { fraction in
                     let now = Date()
                     guard fraction >= 1 || now.timeIntervalSince(lastProgressUpdate) >= 0.1 else { return }
                     lastProgressUpdate = now
@@ -330,6 +343,17 @@ final class AppModel: ObservableObject {
             pairingCode = VBSHA256.hex(Array(key))
             authenticatedStatus = "Enter this code inside the guest using: volumeboot-guest-agent pair <code>. Treat it as a secret."
         } catch { authenticatedStatus = "Pairing setup failed: \(error.localizedDescription)" }
+    }
+
+    func receiveGuestTransfer(_ transfer: VBVerifiedTransfer, destination: URL) {
+        guard vmFolderPath.hasPrefix("/") else { exchangeStatus = "Choose a VM first"; return }
+        do {
+            let folder = URL(fileURLWithPath: vmFolderPath)
+            let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
+            let saved = try VBGuestToolsTransport.receiveTransfer(id: transfer.id, origin: "guest",
+                root: HostGuestExchange.root(for: folder), key: key, destination: destination)
+            exchangeStatus = "Verified and saved \(saved.lastPathComponent)"
+        } catch { exchangeStatus = "Receive failed: \(error.localizedDescription)" }
     }
 
     func queueAuthenticatedGuestPing() {
@@ -450,30 +474,23 @@ final class AppModel: ObservableObject {
     func bootManagedVM() async {
         guard !isVMInUse else { vmStatus = "Stop the current VM before starting another"; return }
         guard !hasUnsavedChanges else { vmStatus = "Save or reload your changes before starting this VM"; return }
+        guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an absolute VM folder path"; return }
+        let url = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
+        do {
+            let record = try VMRegistry.read(at: url)
+            if record.guestOS == .windowsARM {
+                guard let settings = record.qemu else { throw VMGuestError.missingTool("saved QEMU settings") }
+                guard try requestBackendApprovalIfNeeded(settings, action: .start) else { return }
+            }
+        } catch { vmFailure = error.localizedDescription; vmStatus = "Backend check failed: \(error.localizedDescription)"; return }
         vmFailure = nil; shutdownRequested = false
         vmOperationInProgress = true
         defer { vmOperationInProgress = false }
-        guard vmFolderPath.hasPrefix("/") else { vmStatus = "Select an absolute VM folder path"; return }
-        let url = URL(fileURLWithPath: vmFolderPath, isDirectory: true)
         do {
             loadGuestDetails(from: url)
             hardware = try VMHardwareStore.load(from: url)
             connectivity = try VMConnectivityStore.load(from: url)
-            var grant: PrivilegedDiskGrant?
-            if attachDisposableDisk {
-                guard let device = devices.first(where: { $0.id == selectedDeviceID }), device.isWholeDisk else {
-                    vmStatus = "Select an entire external disposable test disk first"; return
-                }
-                grant = try await privilegedBroker.acquireDisposableExternalDisk(device.identifier)
-                vmStatus = "Read-only grant acquired for \(device.identifier); starting guest…"
-            }
-            do {
-                try await vm.startExistingVM(at: url, readOnlyDisk: grant?.disk)
-                activeDiskGrant = grant
-            } catch {
-                grant?.releaseAfterVMStops()
-                throw error
-            }
+            try await vm.startExistingVM(at: url)
             vmRevision += 1
             vmStatus = "\(guestOS.title) VM started" + (vm.usesExternalConsole ? " in the QEMU window; Control + Option + G releases input" : "")
         } catch { vmFailure = error.localizedDescription; vmStatus = "Boot failed: \(error.localizedDescription)" }
@@ -499,8 +516,6 @@ final class AppModel: ObservableObject {
         defer { vmOperationInProgress = false }
         do {
             if !vm.discardAlreadyStoppedSession() { try await vm.stop() }
-            activeDiskGrant?.releaseAfterVMStops()
-            activeDiskGrant = nil
             vmRevision += 1
             shutdownRequested = false
             vmStatus = "VM stopped; disk images released"
@@ -527,6 +542,13 @@ final class AppModel: ObservableObject {
         let mediaPath = guestOS == .macOS ? restoreImagePath : installationISOPath
         guard vmFolderPath.hasPrefix("/"), mediaPath.hasPrefix("/") else {
             vmStatus = "Choose a new VM folder path and local \(guestOS == .macOS ? "IPSW" : "ARM64 ISO")"; return
+        }
+        if guestOS == .windowsARM {
+            do {
+                let settings = try VMQEMUSettings.discover(qemuPath: qemuExecutablePath, swtpmPath: swtpmExecutablePath)
+                guard try requestBackendApprovalIfNeeded(settings, action: .provision) else { return }
+                try settings.verifyApprovedVersions(using: backendTrustStore)
+            } catch { vmFailure = error.localizedDescription; vmStatus = "Backend check failed: \(error.localizedDescription)"; return }
         }
         provisioning = true
         vmFailure = nil
@@ -573,6 +595,34 @@ final class AppModel: ObservableObject {
     }
 
     var isVMInUse: Bool { provisioning || vmOperationInProgress || vm.operationInProgress || vm.hasSession }
+
+    private func requestBackendApprovalIfNeeded(_ settings: VMQEMUSettings, action: BackendApprovalAction) throws -> Bool {
+        guard let identity = try settings.firstUnapprovedExecutable(using: backendTrustStore) else { return true }
+        pendingBackendAction = action
+        backendApprovalRequest = identity
+        vmStatus = "Approval is required before this workspace can run its Windows backend."
+        return false
+    }
+
+    func approveBackendExecutable(persistently: Bool) {
+        guard let identity = backendApprovalRequest, let action = pendingBackendAction else { return }
+        do {
+            try backendTrustStore.approve(identity, persistently: persistently)
+            backendApprovalRequest = nil; pendingBackendAction = nil
+            switch action {
+            case .start: Task { await bootManagedVM() }
+            case .provision: Task { await provisionVM() }
+            }
+        } catch {
+            backendApprovalRequest = nil; pendingBackendAction = nil
+            vmFailure = error.localizedDescription; vmStatus = "Backend approval failed: \(error.localizedDescription)"
+        }
+    }
+
+    func cancelBackendExecutableApproval() {
+        backendApprovalRequest = nil; pendingBackendAction = nil
+        vmStatus = "Windows VM start canceled because its backend executable was not approved."
+    }
 
     func finishARMInstallation() {
         guard !isVMInUse else { vmStatus = "Shut down and stop the VM before finishing installation"; return }

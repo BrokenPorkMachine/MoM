@@ -6,11 +6,12 @@ import Security
 @MainActor
 final class PrivilegedBrokerClient {
     enum ClientFailure: LocalizedError {
-        case notSigned, invalidSigner, unavailable, interrupted, timeout
+        case notSigned, invalidSigner, invalidDiskIdentifier, unavailable, interrupted, timeout
         var errorDescription: String? {
             switch self {
             case .notSigned: return "A valid Apple Developer signing identity is needed before installing this daemon"
             case .invalidSigner: return "Could not establish a trusted, matching code-signing requirement"
+            case .invalidDiskIdentifier: return "Invalid whole-disk identifier"
             case .unavailable: return "Privileged service connection is unavailable or not approved"
             case .interrupted: return "Privileged broker disconnected"
             case .timeout: return "Privileged broker timed out"
@@ -68,13 +69,13 @@ final class PrivilegedBrokerClient {
         }
         let health = try DaemonBrokerContract.decode(response)
         guard health.daemonHasRootPrivileges else { throw ClientFailure.unavailable }
-        return "Signed daemon v\(health.release) connected; root=yes; blank-media disk grants=\(health.rawDiskGrantsEnabled ? "ENABLED" : "DISABLED")"
+        return "Signed daemon v\(health.release) connected; root=yes; physical-disk grants=DISABLED"
     }
 
     /// Returns a read-only topology report. This is not an authorization or a
     /// claim and must never trigger raw-device attachment.
     func inspectTopology(_ name: String) async throws -> String {
-        guard DaemonBrokerContract.validWholeDisk(name) else { throw PhysicalDiskError.invalidBSDName }
+        guard DaemonBrokerContract.validWholeDisk(name) else { throw ClientFailure.invalidDiskIdentifier }
         guard let team = try signedTeamID(),
               let requirement = BrokerSigningRequirements.requirement(teamID: team,
                     bundleID: DaemonBrokerContract.machService) else { throw ClientFailure.notSigned }
@@ -130,114 +131,5 @@ final class PrivilegedBrokerClient {
               let team = dict[kSecCodeInfoTeamIdentifier as String] as? String,
               BrokerSigningRequirements.validTeamID(team) else { return nil }
         return team
-    }
-}
-
-/// Owns the XPC connection for as long as a guest might access the disk.
-/// Caller MUST stop the guest before releasing. Closing the daemon copy alone
-/// does not revoke an already transferred capability on the client side.
-@MainActor
-final class PrivilegedDiskGrant {
-    let disk: ReadOnlyPhysicalDiskLease
-    let metadata: DaemonBrokerContract.GrantedDisk
-    private let connection: NSXPCConnection
-    private var released = false
-
-    init(disk: ReadOnlyPhysicalDiskLease, metadata: DaemonBrokerContract.GrantedDisk,
-         connection: NSXPCConnection) {
-        self.disk = disk
-        self.metadata = metadata
-        self.connection = connection
-    }
-
-    func releaseAfterVMStops() {
-        guard !released else { return }
-        released = true
-        try? disk.close()
-        if let service = connection.remoteObjectProxyWithErrorHandler({ _ in }) as? VolumeBootPrivilegedDaemonProtocol {
-            service.releaseReadOnlyDisk(metadata.leaseID) { _ in }
-        }
-        connection.invalidate()
-    }
-}
-
-/// Completes at most once even when the XPC reply, timeout, or invalidation race.
-private final class PendingPhysicalGrant {
-    typealias Response = (FileHandle?, String, String)
-    private let lock = NSLock()
-    private var result: Result<Response, Error>?
-    private var continuation: CheckedContinuation<Response, Error>?
-
-    func install(_ continuation: CheckedContinuation<Response, Error>) {
-        lock.lock()
-        if let result = result {
-            lock.unlock()
-            continuation.resume(with: result)
-        } else {
-            self.continuation = continuation
-            lock.unlock()
-        }
-    }
-    func finish(_ result: Result<Response, Error>) {
-        lock.lock()
-        guard self.result == nil else { lock.unlock(); return }
-        self.result = result
-        let continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-        continuation?.resume(with: result)
-    }
-}
-
-extension PrivilegedBrokerClient {
-    /// Uses only a signed root daemon and grants only strictly validated
-    /// unpartitioned/unmounted external test media. Never opens /dev in the GUI.
-    func acquireDisposableExternalDisk(_ name: String) async throws -> PrivilegedDiskGrant {
-        guard BrokerAuthorizationPolicy.isValidBSDName(name) else { throw PhysicalDiskError.invalidBSDName }
-        guard let team = try signedTeamID(),
-              let requirement = BrokerSigningRequirements.requirement(teamID: team,
-                  bundleID: DaemonBrokerContract.machService) else { throw ClientFailure.notSigned }
-        let connection = NSXPCConnection(machServiceName: DaemonBrokerContract.machService,
-                                         options: [.privileged])
-        connection.remoteObjectInterface = NSXPCInterface(with: VolumeBootPrivilegedDaemonProtocol.self)
-        connection.setCodeSigningRequirement(requirement)
-        let pending = PendingPhysicalGrant()
-        connection.interruptionHandler = { pending.finish(.failure(ClientFailure.interrupted)) }
-        connection.invalidationHandler = { pending.finish(.failure(ClientFailure.interrupted)) }
-        connection.resume()
-        let timer = Task.detached {
-            do { try await Task.sleep(nanoseconds: BrokerProtocolContract.requestTimeoutNanoseconds) }
-            catch { return }
-            pending.finish(.failure(ClientFailure.timeout))
-        }
-        do {
-            let (handle, payload, reason) = try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<PendingPhysicalGrant.Response, Error>) in
-                pending.install(continuation)
-                guard let service = connection.remoteObjectProxyWithErrorHandler({ _ in
-                    pending.finish(.failure(ClientFailure.unavailable))
-                }) as? VolumeBootPrivilegedDaemonProtocol else {
-                    pending.finish(.failure(ClientFailure.unavailable)); return
-                }
-                service.requestReadOnlyDisk(name) { fd, grant, message in
-                    pending.finish(.success((fd, grant, message)))
-                }
-            }
-            timer.cancel()
-            guard let handle else { throw PhysicalDiskError.permissionDeniedWithReason(reason) }
-            defer { try? handle.close() }
-            let metadata = try DaemonBrokerContract.decodeGrant(payload, expectedBSD: name)
-            let identity = PhysicalDiskIdentity(bsdName: name, wholeDiskBSDName: name,
-                mediaUUID: "IORegistry:\(metadata.ioRegistryID)", sizeBytes: metadata.sizeBytes,
-                isInternal: false, isWholeDisk: true)
-            let lease = try ReadOnlyPhysicalDiskLease(identity: identity,
-                sessionID: UUID(uuidString: metadata.leaseID)!,
-                transferredDescriptor: handle.fileDescriptor)
-            return PrivilegedDiskGrant(disk: lease, metadata: metadata, connection: connection)
-        } catch {
-            timer.cancel()
-            connection.invalidate()
-            throw error
-        }
     }
 }

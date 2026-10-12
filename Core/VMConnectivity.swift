@@ -7,6 +7,10 @@ enum VMNetworkMode: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum ReleaseFeaturePolicy {
+    static let bridgedNetworkingEnabled = false
+}
+
 struct VMConnectivitySettings: Codable, Equatable {
     var version: Int = 1
     var networkMode: VMNetworkMode = .nat
@@ -19,13 +23,14 @@ struct VMConnectivitySettings: Codable, Equatable {
 }
 
 enum VMConnectivityError: Error, LocalizedError, Equatable {
-    case missingBridgedInterface, invalidBridgedInterface
+    case missingBridgedInterface, invalidBridgedInterface, bridgedUnavailableInRelease
     case invalidSharedPath, shareNotDirectory, shareOverlapsVM, shareInDeviceTree
     case unsupportedVersion
     var errorDescription: String? {
         switch self {
         case .missingBridgedInterface: return "Select a physical interface for bridged networking"
         case .invalidBridgedInterface: return "The selected bridge interface is no longer available"
+        case .bridgedUnavailableInRelease: return "Bridged networking is unavailable in this release"
         case .invalidSharedPath: return "Shared folder must be an absolute, existing local directory"
         case .shareNotDirectory: return "The selected share is not a directory"
         case .shareOverlapsVM: return "Shared folder cannot be the VM bundle, contain it, or be contained by it"
@@ -40,6 +45,7 @@ enum VMConnectivityPolicy {
     static func verify(_ settings: VMConnectivitySettings, vmFolder: URL, validInterfaces: Set<String> = []) throws {
         guard settings.version == 1 else { throw VMConnectivityError.unsupportedVersion }
         if settings.networkMode == .bridged {
+            guard ReleaseFeaturePolicy.bridgedNetworkingEnabled else { throw VMConnectivityError.bridgedUnavailableInRelease }
             guard let id = settings.bridgedInterfaceID, !id.isEmpty else { throw VMConnectivityError.missingBridgedInterface }
             guard validInterfaces.contains(id) else { throw VMConnectivityError.invalidBridgedInterface }
         }

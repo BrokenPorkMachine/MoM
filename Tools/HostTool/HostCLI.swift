@@ -9,7 +9,7 @@ struct VBHostCLI {
     static func main() throws {
         let args = Array(CommandLine.arguments.dropFirst())
         guard args.count >= 2 else {
-            print("Usage: volumeboot-host <vm-folder> status | diagnose | inbox | send <text> | push <file> | guest-files | pair-init | pair-code | ping | request-status | replies | clipboard-send [text] | clipboard-peek | clipboard-import")
+            print("Usage: volumeboot-host <vm-folder> status | diagnose | inbox | send <text> | push <file> | guest-files | receive <transfer-id> <folder> | pair-init | pair-code | ping | request-status | replies | clipboard-send [text] | clipboard-peek | clipboard-import")
             return
         }
         let folder = URL(fileURLWithPath: args[0], isDirectory: true)
@@ -42,14 +42,22 @@ struct VBHostCLI {
             print("Queued host message")
         case "push":
             guard args.count == 3 else { throw VBToolsError.malformedRecord }
-            let receipt = try VBGuestToolsTransport.stageFile(URL(fileURLWithPath: args[2]), origin: "host", root: root) { fraction in
+            let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
+            let receipt = try VBGuestToolsTransport.stageFile(URL(fileURLWithPath: args[2]), origin: "host", root: root, key: key) { fraction in
                 fputs("\rStaging: \(Int(fraction * 100))%", stderr)
             }
             print("\nStaged \(receipt.filename) sha256=\(receipt.sha256)")
         case "guest-files":
-            let url = root.appendingPathComponent("guest-files", isDirectory: true)
-            let names = (try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []
-            names.filter { !$0.hasSuffix(".partial") }.sorted().forEach { print($0) }
+            let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
+            for transfer in VBGuestToolsTransport.verifiedTransfers(origin: "guest", root: root, key: key) {
+                print("\(transfer.id) \(transfer.receipt.originalName) (\(transfer.receipt.bytes) bytes, sha256=\(transfer.receipt.sha256))")
+            }
+        case "receive":
+            guard args.count == 4, let id = UUID(uuidString: args[2]) else { throw VBToolsError.malformedRecord }
+            let key = try VBPairing.load(VBPairing.hostKeyPath(folder))
+            let saved = try VBGuestToolsTransport.receiveTransfer(id: id, origin: "guest", root: root, key: key,
+                destination: URL(fileURLWithPath: args[3], isDirectory: true))
+            print("Verified and saved \(saved.lastPathComponent)")
         case "pair-init", "pair-code":
             let key = action == "pair-init" ? try VBPairing.createHostKey(folder) : try VBPairing.load(VBPairing.hostKeyPath(folder))
             print("Pairing key (sensitive; enter manually inside trusted guest): \(VBSHA256.hex(Array(key)))")

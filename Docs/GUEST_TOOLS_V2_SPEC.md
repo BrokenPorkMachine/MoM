@@ -17,7 +17,7 @@ Provide usable host/guest collaboration over the opt-in VirtioFS `Exchange` shar
 | Pairing | `pair-init`, `pair-code` | `pair <hex>` | Manual out-of-band transfer, key stored outside Exchange |
 | Authenticated request | `ping`, `request-status` | `serve` / `poll-once` | Allowlist **ping and status only**; no shell, script or file execution |
 | Authenticated reply | `replies` | Created by agent | HMAC-SHA256, timestamp check, matching UUID |
-| Chunked file staging | `push <file>` | `push <file>` | <=64 MiB, streaming progress, SHA-256 receipt |
+| Authenticated file transfers | `push <file>`, `guest-files`, `receive <id> <folder>` | `push <file>`, `files`, `receive <id> <folder>` | Pairing required; <=64 MiB, streamed SHA-256 and HMAC-authenticated receipt; verify on listing and again while receiving |
 | Network diagnosis | `diagnose` / panel | `status`/`serve` | Mode + heartbeat + authenticated response; **not** a DHCP or internet test |
 | Login installation | N/A | `install-guest-agent.sh install` | Explicit per-user LaunchAgent, no root required |
 
@@ -42,20 +42,27 @@ Files under `requests` and `replies` use UUID `.json` names and a protocol-versi
 
 **Secrets:** Host key: `<VM Bundle>/.guesttools-pairing-key`; guest key: `~/.config/VolumeBoot/guesttools-pairing-key`. Each is 32 random bytes created/stored with owner-only permissions. Neither lives inside the VirtioFS exchange, though access to the VM bundle by other host users remains governed by host filesystem permissions. Displayed pairing codes and command-line history are sensitive. The `pair` command intentionally refuses to overwrite an existing guest key; pair-reset requires explicit local deletion or a future revoke/rekey workflow.
 
-**Important scope statement:** Authentication applies **only** to the restricted ping/status request and reply records. Legacy messages, file receipts, clipboard offers and heartbeat records are **not authenticated**. The exchange is not safe to mount into an adversarial guest as a privileged host IPC interface. The pairing secret does not grant filesystem access or additional host privileges.
+**Important scope statement:** Authentication applies to ping/status requests, replies, and v2 file receipts. Legacy messages, clipboard offers and heartbeat records remain unauthenticated. The exchange is not safe to mount into an adversarial guest as a privileged host IPC interface. The pairing secret does not grant filesystem access or additional host privileges.
 
 ## File transfers
 
-The maximum file size is 64 MiB. A source must be a regular non-symlink file. Transfers use 128 KiB chunks with progress callbacks; the source is written to an ephemeral UUID `.partial` file and renamed into a UUID final name only after all expected bytes have been written and flushed. A companion `<UUID>.transfer.json` includes original display name, transferred byte count, and SHA-256 hash. The manifest is published after the data. The receiving side should verify the final file's byte count and SHA-256 before treating it as completed.
+The maximum file size is 64 MiB. A source must be a regular non-symlink file. Pairing is required on both sides before staging or receiving. Transfers use 128 KiB chunks; each chunk is written directly to an exclusive `.partial` file, with SHA-256 calculated as data streams. A companion `<UUID>.transfer.json` includes origin, original display name, byte count, SHA-256, timestamp, and an HMAC-SHA256 receipt authentication. The receipt is published after the payload. `files`/`guest-files` display only entries with a valid receipt and matching streamed file digest. `receive` verifies again as it streams to an exclusive destination file; it refuses to overwrite an existing destination. A transfer is not shown as complete until both checks pass.
 
-Receipts detect accidental modification; they are **not** authenticated and therefore provide no security against a guest able to alter both bytes and receipt. MIME/content type should not be trusted. Never auto-open or execute staged files. Progress does not imply the receiving application consumed the file. Current implementation is still subject to filesystem TOCTOU and symlink races in a guest-writable directory; hardened `openat` + ownership model is future work.
+Receipt HMAC prevents a party without the pairing key from fabricating trusted metadata; it does not make the shared folder safe against a malicious guest that can alter its own files or exploit host filesystem behavior. Files are opened without following symlinks and verified through directory-relative receipt reads and streamed digest checks. MIME/content type should not be trusted. Never auto-open or execute staged files. Progress does not imply the receiving application consumed the file.
+
+### Retention and quotas
+
+- Each direction retains at most 100 transfers and 256 MiB of payload plus receipt files; entries expire after 7 days. Expired entries are pruned on preparation, staging, listing, and receiving. Incomplete `.partial` files are removed during pruning.
+- Each direction retains at most 500 messages and 8 MiB; messages expire after 7 days and are pruned on send and inbox listing.
+- Each clipboard direction retains at most 20 offers and 1 MiB; offers expire after 10 minutes and are pruned on offer and lookup.
+- Requests and replies expire after 10 minutes and are limited to 200 records / 2 MiB per directory; queueing, serving, and reply listing prune expired records.
 
 ## UI behavior
 
 - The `Network & Guest Integration` panel exposes manual clipboard send/receive and the latest exchange/status information.
 - `Show pairing code` is a sensitive operation that makes the key visible onscreen; treat screenshots as sensitive.
 - `Send authenticated ping` queues a request but does not imply a reply. Press `Refresh` after guest agent polls it.
-- File staging runs off the main actor with a progress bar, and only one UI transfer is active at a time.
+- File staging runs off the main actor with a progress bar, and only one UI transfer is active at a time. Pairing is required. The host lists guest files only after receipt and payload verification, and saves them through the re-verifying receive path.
 - VM NIC setting changes require the VM to restart; guest tools data operations do not.
 
 ## Guest installation / uninstall

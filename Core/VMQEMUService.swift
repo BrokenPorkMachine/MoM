@@ -90,8 +90,7 @@ final class VMQEMUService {
                connectivity: VMConnectivitySettings, leases: [VMDiskImageLease],
                accelerator: String = "hvf", display: String = "cocoa,zoom-to-fit=on") async throws {
         guard process == nil, let settings = record.qemu else { throw VMGuestError.invalidState }
-        guard FileManager.default.isExecutableFile(atPath: settings.executablePath),
-              FileManager.default.isExecutableFile(atPath: settings.swtpmPath) else { throw VMGuestError.missingTool("qemu-system-aarch64 and swtpm") }
+        try settings.verifyApprovedVersions()
         let scratch = URL(fileURLWithPath: "/private/tmp").appendingPathComponent("VBQ-\(UUID())")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: false,
                                                attributes: [.posixPermissions: 0o700])
@@ -113,6 +112,7 @@ final class VMQEMUService {
                                   "--ctrl", "type=unixio,path=\(socket.path),mode=0600,terminate", "--flags", "not-need-init"]
             emulator.standardOutput = tpmLog
             emulator.standardError = tpmLog
+            try settings.verifyApprovedExecutables()
             try emulator.run()
             tpm = emulator
             for _ in 0..<100 {
@@ -145,6 +145,7 @@ final class VMQEMUService {
                 }
             }
             process = vm
+            try settings.verifyApprovedExecutables()
             try vm.run()
             for _ in 0..<200 {
                 guard vm.isRunning else { throw failure("Windows VM could not start", folder: folder, filename: "qemu.log") }

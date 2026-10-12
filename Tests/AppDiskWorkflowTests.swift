@@ -117,9 +117,7 @@ struct AppDiskWorkflowTests {
         armRecord.driverMediaPath = iso.path
         armRecord.qemu = VMQEMUSettings(executablePath: "/usr/bin/true", swtpmPath: "/usr/bin/true")
         try VMRegistry.write(armRecord, at: bundle)
-        model.attachDisposableDisk = true
         model.loadHardwareProfile(for: bundle)
-        check(!model.attachDisposableDisk, "loading Windows clears unsupported physical attachment")
         model.installationISOPath = iso.path
         model.windowsDriverISOPath = ""
         model.saveARMGuestMedia()

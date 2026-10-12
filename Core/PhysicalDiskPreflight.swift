@@ -4,7 +4,7 @@ import Foundation
 struct PhysicalDiskPreflightResult: Sendable {
     let bsdName: String
     let wholeDisk: String
-    let eligibleForBrokerReview: Bool
+    let advisoryChecksPassed: Bool
     let reasons: [String]
 }
 
@@ -70,10 +70,10 @@ struct PhysicalDiskPreflight: Sendable {
         switch PhysicalDiskSafetyPolicy.evaluate(snapshot) {
         case .advisoryCandidate:
             return PhysicalDiskPreflightResult(bsdName: name, wholeDisk: wholeName,
-                eligibleForBrokerReview: true, reasons: ["Advisory checks passed; privileged approval still required"])
+                advisoryChecksPassed: true, reasons: ["Preflight observations passed; this does not authorize physical-disk access"])
         case .denied(let reasons):
             return PhysicalDiskPreflightResult(bsdName: name, wholeDisk: wholeName,
-                eligibleForBrokerReview: false, reasons: reasons)
+                advisoryChecksPassed: false, reasons: reasons)
         }
     }
 }

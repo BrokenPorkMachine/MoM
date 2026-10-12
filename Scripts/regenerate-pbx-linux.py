@@ -26,9 +26,10 @@ def buildRef(target,path):
  if key not in source_refs:
   source_refs[key]=add('bf:'+key,'isa = PBXBuildFile; fileRef = '+refs[path]+';')
  return source_refs[key]
-app_sources=[p for p in refs if p.startswith(('App/','Core/'))]
+excluded_app_sources={'Core/PhysicalDiskAccess.swift','Core/ReadOnlyGrantPolicy.swift'}
+app_sources=[p for p in refs if p.startswith(('App/','Core/')) and p not in excluded_app_sources]
 xpc_sources=['Helpers/VolumeBootDiskBroker/main.swift','Core/BrokerAuthorizationPolicy.swift','Core/BrokerProtocolContract.swift']
-daemon_sources=['Privileged/VolumeBootRawDiskDaemon/main.swift','Privileged/VolumeBootRawDiskDaemon/TrustedDiskProbe.swift','Core/BrokerAuthorizationPolicy.swift','Core/DaemonBrokerContract.swift','Core/ReadOnlyGrantPolicy.swift','Core/PhysicalDiskTopologyProof.swift','Privileged/VolumeBootRawDiskDaemon/PhysicalDiskTopologyProbe.swift']
+daemon_sources=['Privileged/VolumeBootRawDiskDaemon/main.swift','Core/BrokerAuthorizationPolicy.swift','Core/DaemonBrokerContract.swift','Core/PhysicalDiskTopologyProof.swift','Privileged/VolumeBootRawDiskDaemon/PhysicalDiskTopologyProbe.swift']
 # groups
 folders={}
 for group,path in [('App','App/'),('Core','Core/'),('Helpers','Helpers/VolumeBootDiskBroker/'),('Privileged','Privileged/VolumeBootRawDiskDaemon/')]:

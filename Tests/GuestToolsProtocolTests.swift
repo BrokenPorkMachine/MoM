@@ -83,21 +83,27 @@ struct GuestToolsProtocolTests {
         let source = root.appendingPathComponent("sample.txt")
         try Data(repeating: 0x4f, count: 300_000).write(to: source)
         var steps: [Double] = []
-        let receipt = try VBGuestToolsTransport.stageFile(source, origin: "host", root: exchange) { steps.append($0) }
+        let receipt = try VBGuestToolsTransport.stageFile(source, origin: "host", root: exchange, key: key) { steps.append($0) }
         try check(receipt.bytes == 300_000, "receipt bytes")
         try check(steps.count >= 3 && steps.last == 1 && steps.allSatisfy { $0 > 0 && $0 <= 1 }, "progress monotonic bounded")
         let finalFile = exchange.appendingPathComponent("host-files/\(receipt.filename)")
         try check(try VBGuestToolsTransport.verifyFile(finalFile, against: receipt), "hash verified")
+        try check(VBGuestToolsTransport.verifiedTransfers(origin: "host", root: exchange, key: key).first?.id == receipt.id, "authenticated transfer listing")
+        try check(VBGuestToolsTransport.verifiedTransfers(origin: "host", root: exchange, key: Data(repeating: 7, count: 32)).isEmpty, "wrong-key transfer listing rejected")
+        let destination = root.appendingPathComponent("received", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+        let receivedURL = try VBGuestToolsTransport.receiveTransfer(id: receipt.id, origin: "host", root: exchange, key: key, destination: destination)
+        try check(try Data(contentsOf: receivedURL) == Data(repeating: 0x4f, count: 300_000), "verified receive streaming")
         try Data("tampered".utf8).write(to: finalFile)
         try check(try !VBGuestToolsTransport.verifyFile(finalFile, against: receipt), "tamper detected")
-        reject({ _ = try VBGuestToolsTransport.stageFile(source, origin: "admin", root: exchange) }, "invalid transfer origin")
+        reject({ _ = try VBGuestToolsTransport.stageFile(source, origin: "admin", root: exchange, key: key) }, "invalid transfer origin")
         let large = root.appendingPathComponent("large.bin")
         let file = FileManager.default.createFile(atPath: large.path, contents: Data())
         try check(file, "create oversized fixture")
         let h = try FileHandle(forWritingTo: large)
         try h.truncate(atOffset: 64 * 1024 * 1024 + 1)
         try h.close()
-        reject({ _ = try VBGuestToolsTransport.stageFile(large, origin: "host", root: exchange) }, "oversize transfer")
+        reject({ _ = try VBGuestToolsTransport.stageFile(large, origin: "host", root: exchange, key: key) }, "oversize transfer")
         print("PASS: \(count) SHA, pairing, authenticated request, clipboard and transfer assertions")
     }
 }

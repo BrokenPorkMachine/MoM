@@ -1,4 +1,6 @@
-# Network Backend — VolumeBoot v0.15.0
+# Network Backend — MacOnMac
+
+Current shipping status is documented in [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md). Bridged networking is disabled; the v0.15 details below record the implementation history and must not be read as current availability.
 
 ## Scope and configuration
 
@@ -10,7 +12,7 @@
 
 ## Entitlements
 
-Bridged mode requires `com.apple.vm.networking`. The default checked-in `Resources/VolumeBoot.entitlements` deliberately does not include this additional entitlement, so NAT is the reliable default. The optional `Resources/VolumeBoot-Bridged.entitlements` is only a **template**. If your Apple signing profile supports the entitlement, select that file for the **app target** `CODE_SIGN_ENTITLEMENTS` setting, sign, and validate on your host. The presence of this template is not proof your signing team can use it. Some interfaces may not support bridging or may disappear between selecting and booting.
+Bridged networking is disabled in the current release: it is omitted from the UI and rejected by connectivity policy. Older saved profiles that request bridging are loaded with NAT selected. The entitlement file remains a research template and does not enable this feature.
 
 ## Lifecycle
 
@@ -18,7 +20,7 @@ Bridged mode requires `com.apple.vm.networking`. The default checked-in `Resourc
 - Provisioning writes the selected profile before creating a VZ configuration.
 - Both VM install and existing-VM boot validate settings and call `VZVirtualMachineConfiguration.validate()`; unsupported bridge mode returns a framework error (fail closed).
 - Changes do not live-edit the running network stack. Do not alter a running VM's settings file externally.
-- LAN exposure: Bridged mode puts guest networking on the host's LAN; firewall, DHCP, mDNS and guest OS rules remain guest responsibilities. NAT is outbound-focused and should not be confused with a port-forwarding service.
+- LAN exposure: Bridged networking would place a guest on the host's LAN, so it stays disabled until entitlement, signing, and live network qualification pass. NAT is outbound-focused and should not be confused with a port-forwarding service.
 
 ## Future work
 
@@ -32,4 +34,4 @@ API references:
 
 ## v0.16.0 Network and integration diagnostics
 
-`volumeboot-host <VM> diagnose` and the Guest Tools panel report selected network mode, guest heartbeat freshness, and authenticated ping/status response counts. These are integration/transport indicators. They do not prove the guest has DHCP, a working DNS resolver, or internet/LAN reachability. The Guest Tools protocol uses VirtioFS and works when the guest virtual NIC is disconnected. NAT and bridging implementation from v0.15 are unchanged.
+`volumeboot-host <VM> diagnose` and the Guest Tools panel report selected network mode, guest heartbeat freshness, and authenticated ping/status response counts. These are integration/transport indicators. They do not prove the guest has DHCP, a working DNS resolver, or internet/LAN reachability. The Guest Tools protocol uses VirtioFS and works when the guest virtual NIC is disconnected. NAT remains available for evaluation; bridged networking is disabled.

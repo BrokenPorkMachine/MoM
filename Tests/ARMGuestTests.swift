@@ -70,6 +70,9 @@ struct ARMGuestTests {
         let nativeGrown = try VMDiskImageStore.grow(at: hardware.bootDiskURL(in: linux), toGiB: 80)
         check(nativeGrown.sizeGiB == 80, "native shutdown allows disk mutation after attachment release")
         let tools = try VMQEMUSettings.discover()
+        let testTrustStore = VMBackendExecutableTrustStore.shared
+        try testTrustStore.approve(try VMBackendExecutableTrustStore.inspect(kind: .qemu, path: tools.executablePath), persistently: true)
+        try testTrustStore.approve(try VMBackendExecutableTrustStore.inspect(kind: .swtpm, path: tools.swtpmPath), persistently: true)
         let windows = scratch.appendingPathComponent("Windows with spaces,comma")
         try runtime.createARMGuest(at: windows, guestOS: .windowsARM, installationMediaURL: iso, diskSizeGiB: 64,
             connectivity: .default, hardware: hardware, qemuSettings: tools,

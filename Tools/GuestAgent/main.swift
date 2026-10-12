@@ -22,7 +22,7 @@ struct VBGuestAgent {
     static func main() throws {
         let args = Array(CommandLine.arguments.dropFirst())
         guard let action = args.first else {
-            print("Usage: volumeboot-guest-agent status | serve | poll-once | pair <secret> | send <text> | inbox | push <file> | files | clipboard-send [text] | clipboard-peek | clipboard-import")
+            print("Usage: volumeboot-guest-agent status | serve | poll-once | pair <secret> | send <text> | inbox | push <file> | files | receive <id> <folder> | clipboard-send [text] | clipboard-peek | clipboard-import")
             return
         }
         if action == "pair" {
@@ -68,14 +68,22 @@ struct VBGuestAgent {
                 .forEach { print("\($0.timestamp): \($0.body)") }
         case "push":
             guard args.count == 2 else { throw VBToolsError.malformedRecord }
-            let receipt = try VBGuestToolsTransport.stageFile(URL(fileURLWithPath: args[1]), origin: "guest", root: exchange) { fraction in
+            let key = try VBPairing.load(keyPath())
+            let receipt = try VBGuestToolsTransport.stageFile(URL(fileURLWithPath: args[1]), origin: "guest", root: exchange, key: key) { fraction in
                 fputs("\rStaging: \(Int(fraction * 100))%", stderr)
             }
             print("\nStaged \(receipt.filename) sha256=\(receipt.sha256)")
         case "files":
-            let directory = exchange.appendingPathComponent("host-files")
-            let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-            files.filter { !$0.hasSuffix(".partial") }.sorted().forEach { print($0) }
+            let key = try VBPairing.load(keyPath())
+            for transfer in VBGuestToolsTransport.verifiedTransfers(origin: "host", root: exchange, key: key) {
+                print("\(transfer.id) \(transfer.receipt.originalName) (\(transfer.receipt.bytes) bytes, sha256=\(transfer.receipt.sha256))")
+            }
+        case "receive":
+            guard args.count == 3, let id = UUID(uuidString: args[1]) else { throw VBToolsError.malformedRecord }
+            let key = try VBPairing.load(keyPath())
+            let saved = try VBGuestToolsTransport.receiveTransfer(id: id, origin: "host", root: exchange, key: key,
+                destination: URL(fileURLWithPath: args[2], isDirectory: true))
+            print("Verified and saved \(saved.lastPathComponent)")
         case "clipboard-send":
             let text: String
             if args.count > 1 { text = args.dropFirst().joined(separator: " ") }

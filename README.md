@@ -1,5 +1,7 @@
 # MacOnMac — Virtual workspace manager
 
+**Current support boundary:** this is an evaluation preview; no complete guest configuration is yet production-qualified. Physical disk attachment is disabled, and host disk inventory/topology are inspection-only. See the [release support matrix](Docs/SUPPORT_MATRIX.md) for host, guest, backend, feature status, and qualification gates.
+
 The native workspace separates setup, console, hardware, disks, and network, with recent VM persistence, readiness checks, unsaved-change protection, graceful shutdown, and confirmed force stop. See the [correctness/UI audit](Docs/AUDIT_AND_POLISH.md) and run `Scripts/preview-ui.sh` for layout previews.
 
 **Virtual machines** installs and runs macOS from Apple IPSW files, ARM Linux from an AArch64 ISO using Apple Virtualization.framework, and Windows ARM from an ARM64 ISO using QEMU/HVF with persistent UEFI and TPM 2.0. Windows requires QEMU 9.2+ and swtpm. See [ARM guest setup](Docs/ARM_GUESTS.md).
@@ -10,7 +12,7 @@ Run `Scripts/test-disk-images.sh` and `Scripts/test-arm-guests.sh` for disk work
 
 # MacOnMac v0.16.0 — Guest Tools v2
 
-This version extends v0.15.0 with manual host/guest clipboard offers, paired HMAC-authenticated ping/status requests, streamed file progress and SHA-256 receipts, network status diagnostics, and an opt-in per-user macOS guest-agent installer. It preserves VM NAT/optional bridging/VirtioFS and all earlier storage/VM work. Nothing here establishes direct boot of an existing physical macOS installation.
+This version extends v0.15.0 with manual host/guest clipboard offers, paired HMAC-authenticated ping/status requests, streamed file progress and SHA-256 receipts, network status diagnostics, and an opt-in per-user macOS guest-agent installer. It preserves VM NAT/VirtioFS and all earlier storage/VM work. Nothing here establishes direct boot of an existing physical macOS installation.
 
 **Start here:** [Release notes](Docs/RELEASE_v0.16.0.md), [Guest Tools v2 specification](Docs/GUEST_TOOLS_V2_SPEC.md), [Networking](Docs/NETWORKING.md). Run `./Scripts/verify-linux.sh` for portable tests; macOS builds and guest testing must be done in Xcode and a managed VM on your Mac.
 
@@ -22,42 +24,9 @@ Adds per-VM NAT / bridged / disconnected networking, persistent virtual MAC iden
 
 Run `./Scripts/verify-linux.sh` for portable structural/policy checks; full macOS Xcode build and live guest boot are still unverified. On your Mac use `./Scripts/build-host-tool.sh` and `./Scripts/build-guest-agent.sh` for standalone utilities.
 
-# MacOnMac v0.14.0 — Experimental Read-Only Physical Disk Grants
+# MacOnMac v0.14.0 — Physical Disk Grant Experiment (Withdrawn)
 
-MacOnMac adds a **bounded XPC `FileHandle` handoff** from its signed, root
-LaunchDaemon to the unprivileged VM process. A selected disposable physical
-disk may be attached **read-only as secondary storage to an existing managed
-macOS VM**. All actual behavior is pending a native macOS SDK compile, signing,
-SMAppService installation, and live disposable-device test.
-
-**Very restrictive v0.13 policy:** the device must be an *external physical
-whole disk*, unmounted, *without a partition map containing partitions, APFS,
-or a recognized filesystem*, and with consistent DiskArbitration/IOKit identity
-and metadata before/after an `O_RDONLY` open. Unknown means denied. Do not use
-this feature with valued data. No writes, filesystem repair, unmounting or
-destructive initialization operations are implemented.
-
-The existing macOS installation use case remains **unsupported**, because disks
-with APFS/system partitions are explicitly denied. This release is a controlled
-prerequisite, not evidence of direct macOS boot compatibility.
-
-## Getting started
-
-1. Read `Docs/RELEASE_v0.14.0.md`, `Docs/READ_ONLY_GRANT.md`, and `Docs/BROKER_DEPLOYMENT.md`.
-2. Build the included `MacOnMac.xcodeproj` on macOS with an Apple Developer Team.
-3. Verify signatures with `Scripts/check-daemon-bundle.sh`.
-4. Request and approve privileged daemon registration in the Device Browser.
-5. Provision and confirm a normal managed VM **without** any physical disk first.
-6. Only with an expendable **empty** external disk, select the whole-disk row,
-   check the experimental secondary-disk toggle, and start that managed VM.
-7. Stop the VM to release the local FD and XPC lease. Check the host test drive
-   remains byte-for-byte unchanged using your preferred independent tooling.
-
-## Checks runnable without Xcode
-
-`./Scripts/verify-linux.sh` includes deterministic policy, daemon-contract,
-lease reservation and authorization regression tests plus syntax/plist checks.
-This is **not** a macOS full build or hardware validation.
+The v0.14.0 physical-disk grant experiment is not part of the current release scope. The attachment toggle and daemon grant path are disabled. Do not follow older release notes that describe granting a physical disk to a VM; use the current [release support matrix](Docs/SUPPORT_MATRIX.md). Topology inspection remains diagnostic and read-only.
 
 # MacOnMac v0.12.0 — Signed daemon deployment foundation
 
@@ -116,7 +85,7 @@ synthesized volumes, mount state, multi-store containers, and host-root overlap.
 **No APFS / existing macOS disk can be granted to a VM in this build.** The
 exclusive `DADiskClaim`/`DADiskUnclaim` lifecycle is not yet implemented or
 validated on macOS. `candidateUnclaimed` means *only* preliminary observations.
-The existing v0.13.0 blank-external-media grant is unchanged.
+Physical-disk attachment and descriptor grants are disabled in this release. The daemon exposes topology diagnostics only; it cannot grant a raw disk descriptor to a VM.
 
 `./Scripts/verify.sh` runs the tests and a macOS Xcode compile.
 `./Scripts/verify-linux.sh` runs structural and cross-platform pure-Swift tests.

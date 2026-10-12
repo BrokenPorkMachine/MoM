@@ -8,7 +8,7 @@ import Foundation
         }
         let h = DaemonBrokerContract.health(isRoot: true)
         check(try DaemonBrokerContract.decode(DaemonBrokerContract.encode(h)) == h, "roundtrip")
-        check(h.signedPeerRequired && h.rawDiskGrantsEnabled, "root-only scratch grant contract")
+        check(h.signedPeerRequired && !h.rawDiskGrantsEnabled, "physical disk grants disabled in release")
         check(h.availableOperations.contains("readOnlyTopology"), "topology diagnostic capability")
         check(DaemonBrokerContract.validWholeDisk("disk9"), "whole disk")
         for name in ["disk01", "disk3s1", "../disk3", "/dev/disk1", "disk", "disk-1", "disk1\n"] {
@@ -24,7 +24,7 @@ import Foundation
         check(DaemonBrokerContract.daemonPlist == "ca.zensoftware.MacOnMac.RawDiskBroker.plist", "launchd plist identity")
         check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: "ca.zensoftware.VolumeBoot") == nil, "reject obsolete app identity")
         check(BrokerSigningRequirements.requirement(teamID: "ABCDEFGHIJ", bundleID: "attacker.bundle") == nil, "reject foreign identifier")
-        let unsafe = DaemonBrokerContract.Health(protocolVersion: 3, release: "0.14.0", signedPeerRequired: true,
+        let unsafe = DaemonBrokerContract.Health(protocolVersion: 3, release: DaemonBrokerContract.releaseVersion, signedPeerRequired: true,
             daemonHasRootPrivileges: true, rawDiskGrantsEnabled: true, availableOperations: ["openWritable"])
         do { _ = try DaemonBrokerContract.decode(DaemonBrokerContract.encode(unsafe)); fatalError("unsafe claims accepted") }
         catch DaemonBrokerContract.Error.unauthorizedClaim { checks += 1 }
@@ -32,16 +32,10 @@ import Foundation
             daemonHasRootPrivileges: true, rawDiskGrantsEnabled: false, availableOperations: ["healthReport"])
         do { _ = try DaemonBrokerContract.decode(DaemonBrokerContract.encode(incompatible)); fatalError("future protocol accepted") }
         catch DaemonBrokerContract.Error.incompatible { checks += 1 }
-        let grant = DaemonBrokerContract.GrantedDisk(leaseID: UUID().uuidString,
-            bsdName: "disk9", sizeBytes: 1_048_576, ioRegistryID: 12345)
-        let encodedGrant = DaemonBrokerContract.encodeGrant(grant)!
-        check(try DaemonBrokerContract.decodeGrant(encodedGrant, expectedBSD: "disk9") == grant, "grant roundtrip")
-        do { _ = try DaemonBrokerContract.decodeGrant(encodedGrant, expectedBSD: "disk8"); fatalError("accepted mismatched grant") }
-        catch DaemonBrokerContract.Error.malformed { checks += 1 }
-        check(!DaemonBrokerContract.health(isRoot: false).rawDiskGrantsEnabled, "unprivileged root gate")
+        check(!DaemonBrokerContract.health(isRoot: false).rawDiskGrantsEnabled, "grants disabled for unprivileged process")
         let missing = DaemonBrokerContract.Health(protocolVersion: DaemonBrokerContract.protocolVersion,
-            release: "0.14.0", signedPeerRequired: true, daemonHasRootPrivileges: true,
-            rawDiskGrantsEnabled: true, availableOperations: ["requestReadOnlyDisk", "releaseReadOnlyDisk"])
+            release: DaemonBrokerContract.releaseVersion, signedPeerRequired: true, daemonHasRootPrivileges: true,
+            rawDiskGrantsEnabled: false, availableOperations: ["healthReport"])
         do { _ = try DaemonBrokerContract.decode(DaemonBrokerContract.encode(missing)); fatalError("missing topology operation") }
         catch DaemonBrokerContract.Error.unauthorizedClaim { checks += 1 }
         print("Daemon contract tests PASS: \(checks) checks")

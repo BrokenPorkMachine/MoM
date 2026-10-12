@@ -7,7 +7,7 @@ import Security
 /// Guest Tools v2. Data-only file protocol transported through the opt-in VirtioFS Exchange.
 /// Never put pairing keys inside the guest-visible Exchange directory.
 enum VBToolsError: Error, LocalizedError {
-    case invalidKey, malformedRecord, invalidOrigin, noPairing, unauthenticated, expired, tooLarge, unsafeFile
+    case invalidKey, malformedRecord, invalidOrigin, noPairing, unauthenticated, expired, tooLarge, unsafeFile, retentionQuota
     var errorDescription: String? {
         switch self {
         case .invalidKey: return "Pairing key must contain exactly 32 random bytes"
@@ -18,6 +18,7 @@ enum VBToolsError: Error, LocalizedError {
         case .expired: return "Request expired or timestamp is in the future"
         case .tooLarge: return "Data exceeds guest tools size limit"
         case .unsafeFile: return "Unsafe source or destination file"
+        case .retentionQuota: return "Guest tools retention quota is full"
         }
     }
 }
@@ -220,19 +221,67 @@ struct VBClipboardOffer: Codable, Identifiable {
     let text: String
 }
 struct VBTransferReceipt: Codable, Identifiable {
+    let version: Int
     let id: UUID
     let createdAt: Date
+    let origin: String
     let filename: String
     let originalName: String
     let bytes: UInt64
     let sha256: String
+    let authentication: String
+
+    var canonical: Data {
+        let milliseconds = Int64(createdAt.timeIntervalSince1970 * 1_000)
+        return Data("transfer|\(version)|\(id.uuidString)|\(milliseconds)|\(origin)|\(filename)|\(Data(originalName.utf8).base64EncodedString())|\(bytes)|\(sha256)".utf8)
+    }
+
+    static func create(id: UUID, createdAt: Date, origin: String, filename: String, originalName: String,
+                       bytes: UInt64, sha256: String, key: Data) throws -> Self {
+        let unsigned = Self(version: 2, id: id, createdAt: createdAt, origin: origin, filename: filename,
+                            originalName: originalName, bytes: bytes, sha256: sha256, authentication: "")
+        return Self(version: 2, id: id, createdAt: createdAt, origin: origin, filename: filename,
+                    originalName: originalName, bytes: bytes, sha256: sha256,
+                    authentication: try VBPairing.mac(key: key, data: unsigned.canonical))
+    }
+
+    func verify(key: Data, now: Date = Date()) throws {
+        guard version == 2, origin == "host" || origin == "guest", bytes <= VBGuestToolsTransport.maxTransfer,
+              originalName.utf8.count <= 1_024, sha256.count == 64, sha256.allSatisfy({ $0.isHexDigit }),
+              filename == id.uuidString + VBGuestToolsTransport.safeExtension(of: filename),
+              createdAt <= now.addingTimeInterval(120), createdAt >= now.addingTimeInterval(-VBGuestToolsTransport.fileRetention) else {
+            throw VBToolsError.malformedRecord
+        }
+        guard VBPairing.constantTimeEqual(authentication, try VBPairing.mac(key: key, data: canonical)) else {
+            throw VBToolsError.unauthenticated
+        }
+    }
+}
+
+struct VBVerifiedTransfer: Identifiable {
+    let receipt: VBTransferReceipt
+    let fileURL: URL
+    var id: UUID { receipt.id }
 }
 
 enum VBGuestToolsTransport {
     static let maxClipboard = 65_536
     static let maxTransfer: UInt64 = 64 * 1024 * 1024
     static let chunkSize = 128 * 1024
-    static let components = ["host-clipboard", "guest-clipboard", "requests", "replies"]
+    static let fileRetention: TimeInterval = 7 * 24 * 60 * 60
+    static let clipboardRetention: TimeInterval = 10 * 60
+    static let protocolRetention: TimeInterval = 10 * 60
+    static let maxRetainedFilesPerDirection = 100
+    static let maxRetainedFileBytesPerDirection: UInt64 = 256 * 1024 * 1024
+    static let maxRetainedClipboardOffersPerDirection = 20
+    static let maxRetainedClipboardBytesPerDirection: UInt64 = 1 * 1024 * 1024
+    static let components = ["host-clipboard", "guest-clipboard", "requests", "replies", "host-files", "guest-files"]
+
+    fileprivate static func safeExtension(of filename: String) -> String {
+        let ext = URL(fileURLWithPath: filename).pathExtension.lowercased()
+        return ext.range(of: "^[a-z0-9]{1,12}$", options: .regularExpression) == nil ? "" : "." + ext
+    }
+
     static func prepare(root: URL) throws {
         guard isSafeDirectory(root) else { throw VBToolsError.malformedRecord }
         for name in components {
@@ -241,13 +290,38 @@ enum VBGuestToolsTransport {
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
             }
             guard isSafeDirectory(folder) else { throw VBToolsError.malformedRecord }
+            let maxFiles: Int
+            let maxBytes: UInt64
+            let retention: TimeInterval
+            switch name {
+            case "host-files", "guest-files":
+                maxFiles = maxRetainedFilesPerDirection * 2; maxBytes = maxRetainedFileBytesPerDirection; retention = fileRetention
+            case "host-clipboard", "guest-clipboard":
+                maxFiles = maxRetainedClipboardOffersPerDirection; maxBytes = maxRetainedClipboardBytesPerDirection; retention = clipboardRetention
+            default:
+                maxFiles = 200; maxBytes = 2 * 1024 * 1024; retention = protocolRetention
+            }
+            _ = try VBGuestFileIO.withExclusiveDirectoryLock(root: root, component: name) {
+                try VBGuestFileIO.prune(root: root, component: name, olderThan: Date().addingTimeInterval(-retention),
+                                        maxFiles: maxFiles, maxBytes: maxBytes)
+            }
         }
     }
     static func storeRecord<T: Encodable>(_ record: T, root: URL, directory: String, id: UUID) throws {
         guard components.contains(directory) else { throw VBToolsError.malformedRecord }
         let folder = root.appendingPathComponent(directory)
         guard Self.isSafeDirectory(root), Self.isSafeDirectory(folder) else { throw VBToolsError.malformedRecord }
-        try VBGuestFileIO.writeNewFile(JSONEncoder().encode(record), name: id.uuidString + ".json", root: root, component: directory)
+        let clipboard = directory == "host-clipboard" || directory == "guest-clipboard"
+        let retention = clipboard ? clipboardRetention : protocolRetention
+        let maxFiles = clipboard ? maxRetainedClipboardOffersPerDirection : 200
+        let maxBytes = clipboard ? maxRetainedClipboardBytesPerDirection : UInt64(2 * 1024 * 1024)
+        let data = try JSONEncoder().encode(record)
+        try VBGuestFileIO.withExclusiveDirectoryLock(root: root, component: directory) {
+            let usage = try VBGuestFileIO.prune(root: root, component: directory, olderThan: Date().addingTimeInterval(-retention), maxFiles: maxFiles, maxBytes: maxBytes)
+            guard usage.files < maxFiles, UInt64(data.count) <= maxBytes,
+                  usage.bytes <= maxBytes - UInt64(data.count) else { throw VBToolsError.retentionQuota }
+            try VBGuestFileIO.writeNewFile(data, name: id.uuidString + ".json", root: root, component: directory)
+        }
     }
     private static func isSafeDirectory(_ url: URL) -> Bool {
         guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
@@ -256,8 +330,14 @@ enum VBGuestToolsTransport {
     }
     static func records<T: Decodable>(_ type: T.Type, root: URL, directory: String, maxBytes: Int = 70_000) -> [T] {
         let folder = root.appendingPathComponent(directory, isDirectory: true)
-        guard components.contains(directory), isSafeDirectory(root), isSafeDirectory(folder),
-              let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return [] }
+        guard components.contains(directory), isSafeDirectory(root), isSafeDirectory(folder) else { return [] }
+        let clipboard = directory == "host-clipboard" || directory == "guest-clipboard"
+        _ = try? VBGuestFileIO.withExclusiveDirectoryLock(root: root, component: directory) {
+            try VBGuestFileIO.prune(root: root, component: directory, olderThan: Date().addingTimeInterval(-(clipboard ? clipboardRetention : protocolRetention)),
+                maxFiles: clipboard ? maxRetainedClipboardOffersPerDirection : 200,
+                maxBytes: clipboard ? maxRetainedClipboardBytesPerDirection : UInt64(2 * 1024 * 1024))
+        }
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]) else { return [] }
         return urls.sorted { a, b in
             let x = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             let y = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
@@ -280,7 +360,8 @@ enum VBGuestToolsTransport {
         guard recipient == "host" || recipient == "guest" else { return nil }
         let from = recipient == "host" ? "guest" : "host"
         return records(VBClipboardOffer.self, root: root, directory: from + "-clipboard")
-            .filter { $0.origin == from && $0.text.utf8.count <= maxClipboard && $0.timestamp <= Date().addingTimeInterval(60) }
+            .filter { $0.origin == from && $0.text.utf8.count <= maxClipboard &&
+                $0.timestamp <= Date().addingTimeInterval(60) && $0.timestamp >= Date().addingTimeInterval(-clipboardRetention) }
             .max(by: { $0.timestamp < $1.timestamp })
     }
     static func queueRequest(_ action: VBGuestAction, root: URL, key: Data) throws -> VBGuestRequest {
@@ -312,7 +393,7 @@ enum VBGuestToolsTransport {
         return processed
     }
     /// Bounded chunked staging; partial files are removed after error, final receipt is written last.
-    static func stageFile(_ source: URL, origin: String, root: URL, progress: (Double) -> Void = { _ in }) throws -> VBTransferReceipt {
+    static func stageFile(_ source: URL, origin: String, root: URL, key: Data, progress: (Double) -> Void = { _ in }) throws -> VBTransferReceipt {
         guard origin == "host" || origin == "guest" else { throw VBToolsError.invalidOrigin }
         let properties = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
         guard properties.isRegularFile == true, properties.isSymbolicLink != true,
@@ -324,50 +405,89 @@ enum VBGuestToolsTransport {
         let ext = source.pathExtension.lowercased()
         let suffix = ext.range(of: "^[a-z0-9]{1,12}$", options: .regularExpression) == nil ? "" : "." + ext
         let name = id.uuidString + suffix
-        let reader = try FileHandle(forReadingFrom: source)
-        defer { try? reader.close() }
         var digest = VBSHA256()
-        var contents = Data()
         var written: UInt64 = 0
-        while written < UInt64(size) {
-            let chunk = reader.readData(ofLength: min(chunkSize, Int(UInt64(size) - written)))
-            guard !chunk.isEmpty else { throw VBToolsError.unsafeFile }
-            contents.append(chunk)
-            digest.update(chunk)
-            written += UInt64(chunk.count)
-            progress(Double(written) / Double(max(1, size)))
-        }
-        // Reject a growing source too: never publish an incomplete snapshot as success.
-        guard reader.readData(ofLength: 1).isEmpty else { throw VBToolsError.unsafeFile }
-        try VBGuestFileIO.writeNewFile(contents, name: name, root: root, component: origin + "-files")
-        let receipt = VBTransferReceipt(id: id, createdAt: Date(), filename: name,
-                                        originalName: source.lastPathComponent, bytes: written,
-                                        sha256: VBSHA256.hex(digest.finish()))
-        let receiptURL = folder.appendingPathComponent(id.uuidString + ".transfer.json")
-        do {
-            try VBGuestFileIO.writeNewFile(JSONEncoder().encode(receipt), name: receiptURL.lastPathComponent, root: root, component: origin + "-files")
-        } catch {
-            try? VBGuestFileIO.removeFile(name: name, root: root, component: origin + "-files")
-            throw error
+        var stagedReceipt: VBTransferReceipt?
+        let component = origin + "-files"
+        try VBGuestFileIO.withExclusiveDirectoryLock(root: root, component: component) {
+            let usage = try VBGuestFileIO.prune(root: root, component: component, olderThan: Date().addingTimeInterval(-fileRetention),
+                maxFiles: maxRetainedFilesPerDirection * 2, maxBytes: maxRetainedFileBytesPerDirection)
+            guard usage.files + 2 <= maxRetainedFilesPerDirection * 2,
+                  usage.bytes <= maxRetainedFileBytesPerDirection - UInt64(size) else { throw VBToolsError.retentionQuota }
+            try VBGuestFileIO.writeStreamedFile(partialName: name + ".partial", finalName: name, root: root, component: component) { fd in
+                written = try VBGuestFileIO.streamRegularFile(source, maximumBytes: maxTransfer, chunkSize: chunkSize) { chunk in
+                    try VBGuestFileIO.writeAll(chunk, to: fd)
+                    digest.update(chunk)
+                    written += UInt64(chunk.count)
+                    progress(Double(written) / Double(max(1, size)))
+                }
+            }
+            let expectedHash = VBSHA256.hex(digest.finish())
+            var storedDigest = VBSHA256()
+            let storedBytes = try VBGuestFileIO.streamRegularFile(folder.appendingPathComponent(name), maximumBytes: maxTransfer,
+                chunkSize: chunkSize) { storedDigest.update($0) }
+            guard storedBytes == written, VBSHA256.hex(storedDigest.finish()) == expectedHash else {
+                throw VBToolsError.unauthenticated
+            }
+            let receipt = try VBTransferReceipt.create(id: id, createdAt: Date(), origin: origin, filename: name,
+                originalName: source.lastPathComponent, bytes: written, sha256: expectedHash, key: key)
+            try VBGuestFileIO.writeNewFile(JSONEncoder().encode(receipt), name: id.uuidString + ".transfer.json", root: root, component: component)
+            stagedReceipt = receipt
         }
         progress(1)
-        return receipt
+        guard let stagedReceipt else { throw VBToolsError.malformedRecord }
+        return stagedReceipt
     }
     static func verifyFile(_ file: URL, against receipt: VBTransferReceipt) throws -> Bool {
         guard file.lastPathComponent == receipt.filename, receipt.bytes <= maxTransfer else { return false }
-        let properties = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-        guard properties.isRegularFile == true, properties.isSymbolicLink != true,
-              properties.fileSize == Int(receipt.bytes) else { return false }
-        let handle = try FileHandle(forReadingFrom: file)
-        defer { try? handle.close() }
-        var hasher = VBSHA256()
-        var read: UInt64 = 0
-        while read < receipt.bytes {
-            let data = handle.readData(ofLength: min(chunkSize, Int(receipt.bytes - read)))
-            guard !data.isEmpty else { return false }
-            read += UInt64(data.count)
-            hasher.update(data)
+        var digest = VBSHA256()
+        let count = try VBGuestFileIO.streamRegularFile(file, maximumBytes: maxTransfer, chunkSize: chunkSize) { digest.update($0) }
+        return count == receipt.bytes && VBSHA256.hex(digest.finish()) == receipt.sha256
+    }
+
+    /// Lists only transfers whose receipt MAC and streamed payload digest both verify.
+    static func verifiedTransfers(origin: String, root: URL, key: Data, now: Date = Date()) -> [VBVerifiedTransfer] {
+        guard origin == "host" || origin == "guest" else { return [] }
+        let component = origin + "-files"
+        guard isSafeDirectory(root), isSafeDirectory(root.appendingPathComponent(component)) else { return [] }
+        _ = try? VBGuestFileIO.withExclusiveDirectoryLock(root: root, component: component) {
+            try VBGuestFileIO.prune(root: root, component: component, olderThan: now.addingTimeInterval(-fileRetention),
+                maxFiles: maxRetainedFilesPerDirection * 2, maxBytes: maxRetainedFileBytesPerDirection)
         }
-        return VBSHA256.hex(hasher.finish()) == receipt.sha256
+        let directory = root.appendingPathComponent(component, isDirectory: true)
+        let receipts = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        return receipts.filter { $0.lastPathComponent.hasSuffix(".transfer.json") }.compactMap { receiptURL in
+            guard let data = try? VBGuestFileIO.readBoundedFile(name: receiptURL.lastPathComponent, root: root, component: component, limit: 8_192),
+                  data.count <= 8_192, let receipt = try? JSONDecoder().decode(VBTransferReceipt.self, from: data),
+                  receipt.id.uuidString + ".transfer.json" == receiptURL.lastPathComponent,
+                  receipt.origin == origin, (try? receipt.verify(key: key, now: now)) != nil else { return nil }
+            let file = directory.appendingPathComponent(receipt.filename)
+            guard (try? verifyFile(file, against: receipt)) == true else { return nil }
+            return VBVerifiedTransfer(receipt: receipt, fileURL: file)
+        }.sorted { $0.receipt.createdAt > $1.receipt.createdAt }
+    }
+
+    /// Copies a previously listed transfer to a user-selected folder, rechecking
+    /// the authenticated receipt and payload while streaming the destination.
+    static func receiveTransfer(id: UUID, origin: String, root: URL, key: Data, destination: URL) throws -> URL {
+        guard let transfer = verifiedTransfers(origin: origin, root: root, key: key).first(where: { $0.id == id }) else {
+            throw VBToolsError.unauthenticated
+        }
+        let rawName = URL(fileURLWithPath: transfer.receipt.originalName).lastPathComponent
+        let safeName = rawName.isEmpty || rawName == "." || rawName == ".." ? "received-\(id.uuidString)" : rawName
+        let finalURL = destination.appendingPathComponent(safeName)
+        let partialName = ".\(id.uuidString).partial"
+        var digest = VBSHA256()
+        var copied: UInt64 = 0
+        try VBGuestFileIO.writeStreamedFile(partialName: partialName, finalName: safeName, in: destination) { fd in
+            copied = try VBGuestFileIO.streamRegularFile(transfer.fileURL, maximumBytes: maxTransfer, chunkSize: chunkSize) { chunk in
+                try VBGuestFileIO.writeAll(chunk, to: fd)
+                digest.update(chunk)
+            }
+            guard copied == transfer.receipt.bytes, VBSHA256.hex(digest.finish()) == transfer.receipt.sha256 else {
+                throw VBToolsError.unauthenticated
+            }
+        }
+        return finalURL
     }
 }

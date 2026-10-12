@@ -21,7 +21,6 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
     private(set) var installer: VZMacOSInstaller?
     var installationProgress: Double { installer?.progress.fractionCompleted ?? 0 }
     private(set) var currentFolder: URL?
-    private var physicalDiskLease: ReadOnlyPhysicalDiskLease?
     private var imageLeases: [VMDiskImageLease] = []
     private(set) var operationInProgress = false
     private let qemu = VMQEMUService()
@@ -48,7 +47,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
 
     private func completeNativeSession(_ ended: VZVirtualMachine, message: String) {
         guard virtualMachine === ended, installer == nil, !operationInProgress else { return }
-        virtualMachine = nil; physicalDiskLease = nil; currentFolder = nil; imageLeases = []
+        virtualMachine = nil; currentFolder = nil; imageLeases = []
         onExternalStateChange?(message)
     }
 
@@ -58,7 +57,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         try virtualMachine.requestStop()
     }
 
-    func startExistingVM(at folder: URL, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) async throws {
+    func startExistingVM(at folder: URL) async throws {
         #if arch(arm64)
         guard !hasSession, !operationInProgress else { throw RuntimeError.busy }
         operationInProgress = true
@@ -75,21 +74,19 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
         let leases = try lockImages(folder: folder, hardware: hardware)
         if manifest.guestOS == .windowsARM {
-            guard readOnlyDisk == nil else { throw VMGuestError.unsupportedWindowsSettings }
             currentFolder = folder
             do { try await qemu.start(folder: folder, record: manifest, hardware: hardware, connectivity: connectivity, leases: leases) }
             catch { currentFolder = nil; throw error }
             return
         }
-        let config = try makeConfiguration(folder: folder, hardware: hardware, readOnlyDisk: readOnlyDisk)
+        let config = try makeConfiguration(folder: folder, hardware: hardware)
         let vm = VZVirtualMachine(configuration: config)
         vm.delegate = self
         virtualMachine = vm
-        physicalDiskLease = readOnlyDisk
         currentFolder = folder
         imageLeases = leases
         do { try await vm.start() } catch {
-            virtualMachine = nil; physicalDiskLease = nil; currentFolder = nil; imageLeases = []; throw error
+            virtualMachine = nil; currentFolder = nil; imageLeases = []; throw error
         }
         #else
         throw RuntimeError.unsupportedHost
@@ -103,7 +100,6 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         guard let vm = virtualMachine else { return true }
         guard vm.state == .stopped || vm.state == .error else { return false }
         virtualMachine = nil
-        physicalDiskLease = nil
         currentFolder = nil
         imageLeases = []
         return true
@@ -121,7 +117,6 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         guard let virtualMachine else { throw RuntimeError.noVM }
         try await virtualMachine.stop()
         self.virtualMachine = nil
-        physicalDiskLease = nil
         currentFolder = nil
         imageLeases = []
     }
@@ -134,7 +129,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         return leases
     }
 
-    private func makeConfiguration(folder: URL, hardware: VMHardwareSettings, readOnlyDisk: ReadOnlyPhysicalDiskLease? = nil) throws -> VZVirtualMachineConfiguration {
+    private func makeConfiguration(folder: URL, hardware: VMHardwareSettings) throws -> VZVirtualMachineConfiguration {
         func file(_ name: String) throws -> URL {
             let url = folder.appendingPathComponent(name)
             guard FileManager.default.fileExists(atPath: url.path) else { throw RuntimeError.missingMetadata(name) }
@@ -181,7 +176,6 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
             config.storageDevices.append(VZUSBMassStorageDeviceConfiguration(
                 attachment: try VZDiskImageStorageDeviceAttachment(url: iso, readOnly: true)))
         }
-        if let readOnlyDisk { config.storageDevices.append(try readOnlyDisk.makeDevice()) }
         if record.guestOS == .macOS {
             let graphics = VZMacGraphicsDeviceConfiguration()
             graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: hardware.display.width,

@@ -43,13 +43,46 @@ struct VMQEMUSettings: Codable, Equatable {
     static func discover(qemuPath: String = "", swtpmPath: String = "") throws -> VMQEMUSettings {
         func executable(_ requested: String, _ name: String) throws -> String {
             let candidates = requested.isEmpty ? ["/opt/homebrew/bin/\(name)", "/usr/local/bin/\(name)"] : [requested]
-            guard let candidate = candidates.first(where: {
-                $0.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: $0)
-            }) else { throw VMGuestError.missingTool(name) }
-            return candidate
+            for candidate in candidates {
+                if let identity = try? VMBackendExecutableTrustStore.inspect(kind: name == "swtpm" ? .swtpm : .qemu, path: candidate) {
+                    return identity.path
+                }
+            }
+            throw VMGuestError.missingTool(name)
         }
         return try VMQEMUSettings(executablePath: executable(qemuPath, "qemu-system-aarch64"),
                                   swtpmPath: executable(swtpmPath, "swtpm"))
+    }
+
+    func firstUnapprovedExecutable(using trustStore: VMBackendExecutableTrustStore = .shared) throws -> VMBackendExecutableIdentity? {
+        for (kind, path) in [(VMBackendKind.qemu, executablePath), (.swtpm, swtpmPath)] {
+            let identity = try VMBackendExecutableTrustStore.inspect(kind: kind, path: path)
+            if try !trustStore.isApproved(identity) { return identity }
+        }
+        return nil
+    }
+
+    func verifyApprovedVersions(using trustStore: VMBackendExecutableTrustStore = .shared) throws {
+        guard machine == "virt-9.2" else { throw VMBackendTrustError.unsupportedMachine(machine) }
+        let qemuIdentity = try VMBackendExecutableTrustStore.inspect(kind: .qemu, path: executablePath)
+        let swtpmIdentity = try VMBackendExecutableTrustStore.inspect(kind: .swtpm, path: swtpmPath)
+        guard try trustStore.isApproved(qemuIdentity) else { throw VMBackendTrustError.approvalRequired(qemuIdentity.path) }
+        guard try trustStore.isApproved(swtpmIdentity) else { throw VMBackendTrustError.approvalRequired(swtpmIdentity.path) }
+        let qemuOutput = try VMBackendVersionProbe.output(path: qemuIdentity.path, arguments: ["--version"], name: "QEMU")
+        _ = try VMBackendVersion.qemu(qemuOutput)
+        let swtpmOutput = try VMBackendVersionProbe.output(path: swtpmIdentity.path, arguments: ["--version"], name: "swtpm")
+        _ = try VMBackendVersion.swtpm(swtpmOutput)
+        // Re-hash after version probes so replacement between approval check and
+        // launch fails closed. VMQEMUService repeats this immediately before run.
+        guard try VMBackendExecutableTrustStore.inspect(kind: .qemu, path: executablePath) == qemuIdentity,
+              try VMBackendExecutableTrustStore.inspect(kind: .swtpm, path: swtpmPath) == swtpmIdentity else {
+            throw VMBackendTrustError.changedDuringInspection(executablePath)
+        }
+    }
+
+    func verifyApprovedExecutables(using trustStore: VMBackendExecutableTrustStore = .shared) throws {
+        try trustStore.verifyCurrentApproval(kind: .qemu, path: executablePath)
+        try trustStore.verifyCurrentApproval(kind: .swtpm, path: swtpmPath)
     }
 
     func firmware(named name: String, overridePath: String = "") throws -> URL {

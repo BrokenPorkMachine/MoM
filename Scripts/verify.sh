@@ -8,6 +8,7 @@ python3 Tests/ProjectStructureTests.py
 ./Scripts/test-daemon-contract.sh
 ./Scripts/test-grant-policy.sh
 ./Scripts/test-topology-proof.sh
+./Scripts/test-backend-trust.sh
 ./Scripts/test-connectivity.sh
 ./Scripts/test-task-dispatch.sh
 ./Scripts/test-disk-images.sh

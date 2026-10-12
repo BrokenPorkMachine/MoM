@@ -13,4 +13,6 @@ ARM_TEST_SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$ARM_TEST_SCRATCH"' EXIT
 swiftc Core/*.swift Tests/ARMGuestTests.swift -o "$ARM_TEST_SCRATCH/arm-guest-tests"
 codesign --force --sign - --entitlements Resources/MacOnMac.entitlements "$ARM_TEST_SCRATCH/arm-guest-tests"
-VOLUMEBOOT_ARM_TEST_ROOT="$ARM_TEST_SCRATCH" "$ARM_TEST_SCRATCH/arm-guest-tests"
+VOLUMEBOOT_ARM_TEST_ROOT="$ARM_TEST_SCRATCH" \
+VOLUMEBOOT_BACKEND_TRUST_FILE="$ARM_TEST_SCRATCH/backend-trust.json" \
+    "$ARM_TEST_SCRATCH/arm-guest-tests"

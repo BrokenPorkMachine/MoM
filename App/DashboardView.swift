@@ -163,7 +163,7 @@ struct DashboardView: View {
                             .disabled(model.brokerDiagnosticRunning)
                         Text(model.brokerDiagnostic).font(.caption).textSelection(.enabled)
                     }
-                    Text("Read-only advisory analysis only. No physical disk handles are granted by the current unprivileged XPC service.")
+                    Text("Host disk inventory and topology are inspection-only. Physical disk handles are disabled in this release.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -182,14 +182,14 @@ struct DashboardView: View {
                         Task { await model.inspectSelectedDaemonTopology() }
                     }.disabled(model.selectedDeviceID == nil || model.detailedTopologyBusy)
                     Text(model.detailedTopologyStatus).font(.caption).textSelection(.enabled)
-                    Text("Requires signed daemon and administrator approval. Read-only grants remain limited to blank external scratch disks; partitioned/APFS disks are inspection-only until exclusive claiming is validated.")
+                    Text("A signed daemon may provide read-only topology diagnostics. Physical disk grants are disabled in this release, regardless of daemon registration or administrator approval.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             if !model.topology.warnings.isEmpty {
                 Text(model.topology.warnings.joined(separator: "; ")).font(.caption).foregroundStyle(.orange)
             }
-            Text("Physical attachment is experimental and limited to blank disposable external media. Never select a disk with data you need; no direct boot of existing macOS installations.")
+            Text("Physical disk attachment is disabled in this release. Existing macOS installations cannot be attached or booted.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -307,9 +307,8 @@ struct DashboardView: View {
                         Label("Direct USB accessory passthrough is unavailable in this release.", systemImage: "cable.connector")
                             .font(.callout).foregroundStyle(.secondary)
                         Divider()
-                        Toggle("Attach the selected disposable external disk (read only)", isOn: $model.attachDisposableDisk)
-                            .disabled(model.guestOS == .windowsARM)
-                        Text("Select a blank external scratch disk in Storage inventory first. Attachment requires the signed privileged service and applies only to this session.")
+                        Label("Physical disk attachment is disabled in this release.", systemImage: "externaldrive.badge.xmark")
+                        Text("Host disk inventory and topology diagnostics are inspection-only. Use managed VM disk images for guest storage.")
                             .font(.caption).foregroundStyle(.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
                 }
@@ -429,21 +428,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Picker("Network mode", selection: $model.connectivity.networkMode) {
                             Text("NAT — internet through host (default)").tag(VMNetworkMode.nat)
-                            if model.guestOS != .windowsARM { Text("Bridged — visible on LAN").tag(VMNetworkMode.bridged) }
                             Text("Disconnected").tag(VMNetworkMode.disconnected)
-                        }
-                        if model.connectivity.networkMode == .bridged {
-                            HStack {
-                                Picker("Physical interface", selection: Binding(
-                                    get: { model.connectivity.bridgedInterfaceID ?? "" },
-                                    set: { model.connectivity.bridgedInterfaceID = $0 })) {
-                                    Text("Select interface").tag("")
-                                    ForEach(model.networkInterfaces, id: \.self) { name in Text(name).tag(name) }
-                                }
-                                Button("Refresh") { model.refreshNetworkInterfaces() }
-                            }
-                            Text("Bridging requires Apple's com.apple.vm.networking entitlement and compatible host interfaces. Standard signing may reject this mode.")
-                                .font(.caption).foregroundStyle(.orange)
                         }
                         Text("NAT gives guests outbound connectivity. It does not automatically make guest services reachable from the LAN.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -501,6 +486,25 @@ struct DashboardView: View {
                             }
                         }
                         Text(model.exchangeStatus).font(.caption).foregroundStyle(.secondary)
+                        if !model.guestTransfers.isEmpty {
+                            Text("Verified files from guest").font(.headline)
+                            ForEach(model.guestTransfers) { transfer in
+                                HStack {
+                                    Text("\(transfer.receipt.originalName) · \(transfer.receipt.bytes) bytes")
+                                        .font(.caption).lineLimit(1)
+                                    Spacer()
+                                    Button("Save…") {
+                                        let panel = NSOpenPanel()
+                                        panel.canChooseDirectories = true
+                                        panel.canChooseFiles = false
+                                        panel.canCreateDirectories = true
+                                        if panel.runModal() == .OK, let folder = panel.url {
+                                            model.receiveGuestTransfer(transfer, destination: folder)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         Divider()
                         Text("Manual text clipboard").font(.headline)
                         HStack {
@@ -547,7 +551,7 @@ struct DashboardView: View {
     private var research: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Research laboratory").font(.title2.bold())
-            Text("No physical macOS installation boot or boot-policy modification is performed by this build. Blank external test-disk attachment is experimental.")
+            Text("No physical macOS installation boot or boot-policy modification is performed by this build. Physical disk attachment is disabled in this release.")
             Text("See Docs/EXPERIMENTS.md for controlled, non-destructive test procedures.")
                 .foregroundStyle(.secondary)
         }

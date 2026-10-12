@@ -8,10 +8,16 @@ except ImportError as exc:
     raise SystemExit('PyYAML is required to validate project.yml') from exc
 root = Path(__file__).resolve().parents[1]
 project = yaml.safe_load((root/'project.yml').read_text())
-app_source_names = {p.name for f in ('App','Core') for p in (root/f).glob('*.swift')}
+app_source_names = {p.name for p in (root/'App').glob('*.swift')}
+core_excludes = set(project['targets']['MacOnMac']['sources'][1].get('excludes', []))
+app_source_names |= {p.name for p in (root/'Core').glob('*.swift') if p.name not in core_excludes}
 daemon_files = {p.relative_to(root).as_posix() for p in (root/'Privileged/VolumeBootRawDiskDaemon').glob('*.swift')}
 explicit = {s['path'] for s in project['targets']['MacOnMacRawDiskDaemon']['sources']}
-assert daemon_files <= explicit, f'daemon sources omitted: {daemon_files - explicit}'
+daemon_excludes = {'Privileged/VolumeBootRawDiskDaemon/TrustedDiskProbe.swift'}
+assert daemon_files - daemon_excludes <= explicit, f'daemon sources omitted: {daemon_files - daemon_excludes - explicit}'
+assert not daemon_excludes & explicit, 'raw-device probe must stay out of the production daemon target'
+assert 'PhysicalDiskAccess.swift' in core_excludes and 'ReadOnlyGrantPolicy.swift' in core_excludes
+assert 'Core/PhysicalDiskAccess.swift' not in explicit and 'Core/ReadOnlyGrantPolicy.swift' not in explicit, 'raw opener and grant policy must stay out of the production daemon target'
 assert 'Core/PhysicalDiskTopologyProof.swift' in explicit
 pbx_path = root/'MacOnMac.xcodeproj/project.pbxproj'
 pbx = pbx_path.read_text()
@@ -40,7 +46,7 @@ if sys.platform == 'darwin':
             source_refs.update(objects[objects[file_id]['fileRef']]['path'] for file_id in phase['files'])
     assert app_source_names <= source_refs, f'app sources missing from compile phase: {app_source_names - source_refs}'
     print('Xcode property list and object graph checks PASS')
-for name in app_source_names | {Path(p).name for p in daemon_files}:
+for name in app_source_names | {Path(p).name for p in daemon_files - daemon_excludes}:
     assert re.search(r'path = (?:"' + re.escape(name) + r'"|' + re.escape(name) + r');', pbx), f'pbx missing {name}'
 assert 'MacOnMacRawDiskDaemon' in pbx
 assert 'MacOnMacDiskBroker' in pbx

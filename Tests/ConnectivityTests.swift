@@ -27,11 +27,8 @@ struct ConnectivityTests {
         try VMConnectivityPolicy.verify(settings, vmFolder: vm)
         count += 1
         settings.networkMode = .bridged
-        rejects({ try VMConnectivityPolicy.verify(settings, vmFolder: vm) }, "missing bridged interface")
         settings.bridgedInterfaceID = "en0"
-        rejects({ try VMConnectivityPolicy.verify(settings, vmFolder: vm) }, "unavailable bridge")
-        try VMConnectivityPolicy.verify(settings, vmFolder: vm, validInterfaces: ["en0"])
-        count += 1
+        rejects({ try VMConnectivityPolicy.verify(settings, vmFolder: vm, validInterfaces: ["en0"]) }, "bridging disabled for release")
         settings.networkMode = .nat
         settings.sharedFolderPath = "relative"
         rejects({ try VMConnectivityPolicy.verify(settings, vmFolder: vm) }, "relative share")

@@ -35,7 +35,10 @@ enum VMReadiness {
         if record.guestOS == .windowsARM {
             check {
                 guard let tools = record.qemu else { throw VMGuestError.missingTool("saved QEMU settings") }
-                _ = try VMQEMUSettings.discover(qemuPath: tools.executablePath, swtpmPath: tools.swtpmPath)
+                let discovered = try VMQEMUSettings.discover(qemuPath: tools.executablePath, swtpmPath: tools.swtpmPath)
+                if let unapproved = try discovered.firstUnapprovedExecutable() {
+                    issues.append("Approval required for \(unapproved.kind.rawValue) at \(unapproved.path)")
+                }
                 guard connectivity.networkMode != .bridged, connectivity.sharedFolderPath == nil,
                       !connectivity.guestToolsEnabled, !hardware.microphoneEnabled else { throw VMGuestError.unsupportedWindowsSettings }
                 if let path = record.driverMediaPath { try VMGuestMedia.verifyISO(URL(fileURLWithPath: path)) }

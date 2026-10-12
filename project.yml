@@ -17,6 +17,9 @@ targets:
     sources:
       - path: App
       - path: Core
+        excludes:
+          - PhysicalDiskAccess.swift
+          - ReadOnlyGrantPolicy.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.zensoftware.MacOnMac
@@ -58,10 +61,8 @@ targets:
       - path: Privileged/VolumeBootRawDiskDaemon/main.swift
       - path: Core/DaemonBrokerContract.swift
       - path: Core/BrokerAuthorizationPolicy.swift
-      - path: Core/ReadOnlyGrantPolicy.swift
       - path: Core/PhysicalDiskTopologyProof.swift
       - path: Privileged/VolumeBootRawDiskDaemon/PhysicalDiskTopologyProbe.swift
-      - path: Privileged/VolumeBootRawDiskDaemon/TrustedDiskProbe.swift
     settings:
       base:
         PRODUCT_NAME: MacOnMacRawDiskDaemon

@@ -4,7 +4,8 @@
 
 - Opt-in bidirectional **plain-text clipboard offers**: host and guest can explicitly offer text and explicitly import it into the local clipboard. No periodic clipboard monitoring.
 - **Authenticated ping/status guest requests**: manually provisioned per-VM/guest pairing key, HMAC-SHA256, protocol v2, timestamp age checks, per-process deduplication, signed replies; only ping/status are accepted. No shell execution.
-- **Chunked file staging** with progress callback, immutable UUID-based final names, `.partial` cleanup and `.transfer.json` receipts with SHA-256 and transferred size. Receipts are not authenticated.
+- **Paired file transfers** with chunked writes, progress callbacks, immutable UUID-based names, HMAC-authenticated receipts, streamed digest checks on listing and receive, and explicit save-to-folder operations.
+- **Bounded exchange retention**: per direction, 100 files / 256 MiB for 7 days; 500 messages / 8 MiB for 7 days; 20 clipboard offers / 1 MiB for 10 minutes. Requests and replies expire after 10 minutes and are capped at 200 records / 2 MiB.
 - **Networking diagnostics** showing configured VM network mode, age of guest heartbeat, and count/latest signed response. These are integration diagnostics, not independent tests of DHCP, DNS, guest IP, or internet connectivity.
 - **Guest login installation script** using a per-user macOS LaunchAgent and an explicit uninstall path; no root or daemon installation.
 - SwiftUI guest-tools pane enhancements for clipboard, pairing, signed ping, transfer progress, and diagnostics.
@@ -19,7 +20,7 @@ Run `./Scripts/verify-linux.sh` for portable parser, policy, Xcode source regist
 ## Safety
 
 - Guest Tools does not execute messages as code or grant shell access.
-- Guest Tools filesystem messages and clipboard data are untrusted; only v2 ping/status requests and replies are keyed and authenticated.
+- Guest Tools messages and clipboard data remain untrusted; v2 ping/status requests, replies, and file receipts are keyed and authenticated.
 - A writable VirtioFS directory is not a hardened hostile-guest isolation boundary. Do not use the feature with untrusted guest operating systems.
 - Direct boot from an existing physical macOS installation is still not implemented. APFS disks remain blocked for raw attachment.
 

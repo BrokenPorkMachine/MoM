@@ -17,12 +17,12 @@ The selected workspace directory cannot be an ancestor or descendant of the VM f
 Exchange/
   host-to-guest/   # UUID-named JSON messages
   guest-to-host/   # UUID-named JSON messages
-  host-files/      # host-staged files (up to 64 MiB)
-  guest-files/     # guest-staged files (up to 64 MiB)
+  host-files/      # authenticated host-staged files (up to 64 MiB each)
+  guest-files/     # authenticated guest-staged files (up to 64 MiB each)
   heartbeat.json   # last guest report (untrusted guest data)
 ```
 
-This is a **data-only** protocol: receiving a message never runs it as a command. Message bodies are capped at 16 KiB, files at 64 MiB, and filenames are randomly generated. Uploaded files are untrusted and must not be auto-opened or executed. Both sides operate under the user's filesystem permissions; do not enable for untrusted guests. v0.15 uses filesystem checks, **not** a hardened transactional `openat`-based channel: do not treat this as a strong security boundary against a malicious guest that can mutate the shared directory.
+This is a **data-only** protocol: receiving a message never runs it as a command. Message bodies are capped at 16 KiB, files at 64 MiB, and filenames are randomly generated. File staging and receiving require pairing. File listings verify the authenticated receipt and streamed payload digest; receiving verifies them again while copying. Uploaded files remain untrusted and must not be auto-opened or executed. Each direction retains up to 100 files / 256 MiB for 7 days, 500 messages / 8 MiB for 7 days, and 20 clipboard offers / 1 MiB for 10 minutes. Do not enable for untrusted guests; receipt authentication does not make the shared directory a privileged IPC boundary.
 
 ## Build and install companion tools
 
@@ -48,6 +48,7 @@ chmod +x ./volumeboot-guest-agent
 ./volumeboot-guest-agent inbox
 ./volumeboot-guest-agent push ~/Desktop/report.txt
 ./volumeboot-guest-agent files
+./volumeboot-guest-agent receive <transfer-id> ~/Downloads
 ```
 
 The guest agent uses `/Volumes/My Shared Files/Exchange` by default, or `VOLUMEBOOT_EXCHANGE` environment variable for manual testing. `serve` writes a heartbeat every 10 seconds and does not listen on TCP, vsock, or any network port. The sample `Resources/GuestAgent/ca.zensoftware.VolumeBoot.GuestAgent.plist` is an *optional* per-user launch agent: change the executable location if needed, then install under `~/Library/LaunchAgents/` **inside the guest** only with explicit user approval. It is not installed automatically.
@@ -60,6 +61,7 @@ On host:
 ./build/volumeboot-host "/path/to/InstalledVM" send "Hello guest"
 ./build/volumeboot-host "/path/to/InstalledVM" push ~/Documents/example.txt
 ./build/volumeboot-host "/path/to/InstalledVM" guest-files
+./build/volumeboot-host "/path/to/InstalledVM" receive <transfer-id> ~/Downloads
 ```
 
 The application's **Network & Guest Tools** panel provides profile editing, messaging, staging host files, heartbeat display, viewing guest messages, and opening the exchange in Finder.
