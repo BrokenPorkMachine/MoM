@@ -13,6 +13,7 @@ PY2
 ./Scripts/test-broker-contract.sh
 ./Scripts/test-broker-policy.sh
 ./Scripts/test-safety.sh
+./Scripts/test-diskutil-process.sh
 
 ./Scripts/test-daemon-contract.sh
 ./Scripts/test-grant-policy.sh

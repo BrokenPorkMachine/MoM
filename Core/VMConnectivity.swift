@@ -43,16 +43,6 @@ enum VMConnectivityError: Error, LocalizedError, Equatable {
 
 /// Pure policy checks usable without Virtualization.framework or a macOS SDK.
 enum VMConnectivityPolicy {
-    static func verifyManaged(_ settings: VMConnectivitySettings, hardware: VMHardwareSettings,
-                              policy: VMManagedPolicy, vmFolder: URL) throws {
-        guard policy.allowGuestTools || !settings.guestToolsEnabled else { throw VMConnectivityError.policyDenied("guest tools") }
-        guard policy.allowWritableShares || settings.shareReadOnly else { throw VMConnectivityError.policyDenied("writable shares") }
-        guard policy.allowBridgedNetworking || settings.networkMode != .bridged else { throw VMConnectivityError.policyDenied("bridged networking") }
-        guard policy.allowedStorageRoots.isEmpty || policy.allowedStorageRoots.contains(where: {
-            vmFolder.path.hasPrefix(URL(fileURLWithPath: $0).standardized.path + "/")
-        }) else { throw VMConnectivityError.policyDenied("VM storage location") }
-    }
-
     static func verify(_ settings: VMConnectivitySettings, vmFolder: URL, validInterfaces: Set<String> = []) throws {
         guard settings.version == 1 else { throw VMConnectivityError.unsupportedVersion }
         if settings.networkMode == .bridged {

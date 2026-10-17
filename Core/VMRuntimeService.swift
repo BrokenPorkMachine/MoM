@@ -82,7 +82,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         let hardware = try VMHardwareStore.load(from: folder)
         let managedPolicy = try VMManagedPolicy.load()
         try managedPolicy.verifyHardware(hardware)
-        try VMConnectivityPolicy.verifyManaged(connectivity, hardware: hardware, policy: managedPolicy, vmFolder: folder)
+        try verifyManagedConnectivity(connectivity, policy: managedPolicy, vmFolder: folder)
         try VMHardwarePolicy.verify(hardware, vmFolder: folder,
             cpuRange: VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount,
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / 1_073_741_824))
@@ -295,7 +295,7 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
             maximumMemoryGiB: Int(VZVirtualMachineConfiguration.maximumAllowedMemorySize / VMDiskImageStore.gibibyte))
         let managedPolicy = try VMManagedPolicy.load()
         try managedPolicy.verifyHardware(hardware)
-        try VMConnectivityPolicy.verifyManaged(connectivity, hardware: hardware, policy: managedPolicy, vmFolder: folder)
+        try verifyManagedConnectivity(connectivity, policy: managedPolicy, vmFolder: folder)
         try VMConnectivityPolicy.verify(connectivity, vmFolder: folder,
             validInterfaces: Set(VZBridgedNetworkInterface.networkInterfaces.map(\.identifier)))
         if guestOS == .windowsARM {
@@ -439,6 +439,16 @@ final class VMRuntimeService: NSObject, @preconcurrency VZVirtualMachineDelegate
         throw RuntimeError.unsupportedHost
         #endif
     }
+}
+
+private func verifyManagedConnectivity(_ settings: VMConnectivitySettings, policy: VMManagedPolicy,
+                                       vmFolder: URL) throws {
+    guard policy.allowGuestTools || !settings.guestToolsEnabled else { throw VMConnectivityError.policyDenied("guest tools") }
+    guard policy.allowWritableShares || settings.shareReadOnly else { throw VMConnectivityError.policyDenied("writable shares") }
+    guard policy.allowBridgedNetworking || settings.networkMode != .bridged else { throw VMConnectivityError.policyDenied("bridged networking") }
+    guard policy.allowedStorageRoots.isEmpty || policy.allowedStorageRoots.contains(where: {
+        vmFolder.path.hasPrefix(URL(fileURLWithPath: $0).standardized.path + "/")
+    }) else { throw VMConnectivityError.policyDenied("VM storage location") }
 }
 
 enum ProvisioningError: LocalizedError {

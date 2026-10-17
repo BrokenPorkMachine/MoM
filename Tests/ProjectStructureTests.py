@@ -8,7 +8,7 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="VB-Project-") as scratch:
     fixture = Path(scratch)
-    for directory in ("App", "Core", "Helpers", "Privileged", "Resources"):
+    for directory in ("App", "Core", "Helpers", "Privileged", "Resources", "Tools"):
         shutil.copytree(root / directory, fixture / directory)
     (fixture / "Scripts").mkdir()
     (fixture / "MacOnMac.xcodeproj").mkdir()
@@ -33,7 +33,9 @@ with tempfile.TemporaryDirectory(prefix="VB-Project-") as scratch:
     if generator:
         info_paths = [fixture / "Resources/Info.plist", fixture / "Helpers/VolumeBootDiskBroker/Info.plist"]
         info_before = [path.read_bytes() for path in info_paths]
-        subprocess.run([generator, "generate", "--spec", str(fixture / "project.yml")], cwd=fixture, check=True, capture_output=True)
+        generated = subprocess.run([generator, "generate", "--spec", str(fixture / "project.yml")],
+                                   cwd=fixture, capture_output=True, text=True)
+        assert generated.returncode == 0, f"XcodeGen failed:\n{generated.stdout}\n{generated.stderr}"
         assert info_before == [path.read_bytes() for path in info_paths], "XcodeGen modified maintained Info.plist files"
         subprocess.run(checker, check=True, capture_output=True)
         print("PASS: portable/XcodeGen project generation, preserved Info.plists, invalid arrays, and conflict rejection")

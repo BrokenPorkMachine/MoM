@@ -11,6 +11,8 @@ python3 Tests/ProjectStructureTests.py
 ./Scripts/test-backend-trust.sh
 ./Scripts/test-connectivity.sh
 ./Scripts/test-task-dispatch.sh
+./Scripts/test-diskutil-process.sh
+./Scripts/test-os-media-downloader.sh
 ./Scripts/test-disk-images.sh
 ./Scripts/test-workspace-lease.sh
 ./Scripts/test-update-rollback.sh

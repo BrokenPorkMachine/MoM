@@ -87,6 +87,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var mediaDownloadStatus = ""
     @Published private(set) var osDownloads: [OSMediaDownloadRecord] = []
     private let mediaDownloader = OSMediaDownloader()
+    private var activeMediaDownloadID: UUID?
 
     init(preferences: (any VMPreferences)? = nil) {
         self.preferences = preferences
@@ -110,14 +111,16 @@ final class AppModel: ObservableObject {
         mediaDownloadInProgress = true
         mediaDownloadStatus = "Finding the latest Apple restore image…"
         let recordID = UUID()
+        activeMediaDownloadID = recordID
         osDownloads.insert(OSMediaDownloadRecord(id: recordID, title: "Latest macOS restore image", destination: destination,
                                                    progress: 0, state: .downloading, detail: destination.path), at: 0)
         mediaDownloader.downloadLatestMacOSRestoreImage(to: destination, progress: { [weak self] value in
-            guard let self else { return }
+            guard let self, self.activeMediaDownloadID == recordID else { return }
             if let index = self.osDownloads.firstIndex(where: { $0.id == recordID }) { self.osDownloads[index].progress = value }
             self.mediaDownloadStatus = "Downloading Apple restore image… \(Int(value * 100))%"
         }) { [weak self] result in
-            guard let self else { return }
+            guard let self, self.activeMediaDownloadID == recordID else { return }
+            self.activeMediaDownloadID = nil
             self.mediaDownloadInProgress = false
             switch result {
             case .success(let url):
@@ -143,6 +146,10 @@ final class AppModel: ObservableObject {
         mediaDownloader.cancel()
         mediaDownloadInProgress = false
         mediaDownloadStatus = "Download cancelled."
+        if let id = activeMediaDownloadID {
+            updateDownload(id, state: .cancelled, detail: "Download cancelled.", progress: 0)
+            activeMediaDownloadID = nil
+        }
     }
 
     func openTerminalForMacOSInstallerList() {

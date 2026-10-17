@@ -71,6 +71,7 @@ final class VMControlListener: NSObject, NSXPCListenerDelegate {
 }
 
 let listener = NSXPCListener.service()
-listener.delegate = VMControlListener()
+let delegate = VMControlListener()
+listener.delegate = delegate
 listener.resume()
-RunLoop.current.run()
+withExtendedLifetime(delegate) { RunLoop.current.run() }

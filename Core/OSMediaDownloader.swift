@@ -5,6 +5,7 @@ enum OSMediaDownloadError: LocalizedError {
     case unsupportedSource
     case invalidDestination
     case missingRemoteURL
+    case incompleteDownload
     case appleCatalogueUnavailable(String)
 
     var errorDescription: String? {
@@ -12,6 +13,7 @@ enum OSMediaDownloadError: LocalizedError {
         case .unsupportedSource: "The restore image was not provided by an approved official source."
         case .invalidDestination: "Choose a local file destination for the restore image."
         case .missingRemoteURL: "Apple did not provide a downloadable restore image URL."
+        case .incompleteDownload: "The restore image download ended before all expected bytes arrived."
         case .appleCatalogueUnavailable(let detail):
             "Apple’s restore-image catalogue could not be loaded after several attempts: \(detail)"
         }
@@ -63,13 +65,23 @@ enum OSMediaSource {
 
 @MainActor
 final class OSMediaDownloader {
+    private let session: URLSession
+    private let sourceURLProvider: (@MainActor () async throws -> URL)?
     private var task: Task<Void, Never>?
+    private var taskID: UUID?
+
+    init(session: URLSession = .shared,
+         sourceURLProvider: (@MainActor () async throws -> URL)? = nil) {
+        self.session = session
+        self.sourceURLProvider = sourceURLProvider
+    }
 
     var isDownloading: Bool { task != nil }
 
     func cancel() {
         task?.cancel()
         task = nil
+        taskID = nil
     }
 
     func downloadLatestMacOSRestoreImage(to destination: URL, progress: @escaping (Double) -> Void,
@@ -84,40 +96,58 @@ final class OSMediaDownloader {
             return
         }
 
+        let id = UUID()
+        taskID = id
         task = Task { [weak self] in
+            defer {
+                if self?.taskID == id {
+                    self?.task = nil
+                    self?.taskID = nil
+                }
+            }
             do {
-                var restoreImage: VZMacOSRestoreImage?
-                var lastError: Error?
-                for attempt in 0..<3 {
-                    do {
-                        restoreImage = try await VZMacOSRestoreImage.latestSupported
-                        break
-                    } catch {
-                        lastError = error
-                        if attempt < 2 {
-                            try await Task.sleep(for: .seconds(2 * (attempt + 1)))
+                let sourceURL: URL
+                if let sourceURLProvider = self?.sourceURLProvider {
+                    sourceURL = try await sourceURLProvider()
+                } else {
+                    var restoreImage: VZMacOSRestoreImage?
+                    var lastError: Error?
+                    for attempt in 0..<3 {
+                        do {
+                            restoreImage = try await VZMacOSRestoreImage.latestSupported
+                            break
+                        } catch {
+                            lastError = error
+                            if attempt < 2 {
+                                try await Task.sleep(for: .seconds(2 * (attempt + 1)))
+                            }
                         }
                     }
+                    guard let restoreImage else {
+                        throw OSMediaDownloadError.appleCatalogueUnavailable(lastError?.localizedDescription ?? "Unknown Apple installation-service error.")
+                    }
+                    sourceURL = restoreImage.url
                 }
-                guard let restoreImage else {
-                    throw OSMediaDownloadError.appleCatalogueUnavailable(lastError?.localizedDescription ?? "Unknown Apple installation-service error.")
-                }
-                let sourceURL = restoreImage.url
                 guard OSMediaSource.isApprovedAppleDownload(sourceURL) else {
                     throw OSMediaDownloadError.missingRemoteURL
                 }
-                let (bytes, response) = try await URLSession.shared.bytes(from: sourceURL)
+                let (bytes, response) = try await (self?.session ?? .shared).bytes(from: sourceURL)
                 guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                     throw URLError(.badServerResponse)
+                }
+                guard let finalURL = http.url, OSMediaSource.isApprovedAppleDownload(finalURL) else {
+                    throw OSMediaDownloadError.unsupportedSource
                 }
                 let fileManager = FileManager.default
                 let parent = destination.deletingLastPathComponent()
                 guard fileManager.isWritableFile(atPath: parent.path) else {
                     throw OSMediaDownloadError.invalidDestination
                 }
-                let staged = parent.appendingPathComponent(".\(destination.lastPathComponent).download")
-                try? fileManager.removeItem(at: staged)
-                fileManager.createFile(atPath: staged.path, contents: nil)
+                let staged = parent.appendingPathComponent(".\(destination.lastPathComponent).\(id.uuidString).download")
+                defer { try? fileManager.removeItem(at: staged) }
+                guard fileManager.createFile(atPath: staged.path, contents: nil) else {
+                    throw OSMediaDownloadError.invalidDestination
+                }
                 let handle = try FileHandle(forWritingTo: staged)
                 defer { try? handle.close() }
                 let expected = response.expectedContentLength
@@ -136,14 +166,20 @@ final class OSMediaDownloader {
                 }
                 if !buffer.isEmpty { try handle.write(contentsOf: buffer) }
                 try Task.checkCancellation()
-                try? fileManager.removeItem(at: destination)
-                try fileManager.moveItem(at: staged, to: destination)
+                guard received > 0, expected <= 0 || received == expected else {
+                    throw OSMediaDownloadError.incompleteDownload
+                }
+                try handle.close()
+                if fileManager.fileExists(atPath: destination.path) {
+                    _ = try fileManager.replaceItemAt(destination, withItemAt: staged)
+                } else {
+                    try fileManager.moveItem(at: staged, to: destination)
+                }
                 progress(1)
                 completion(.success(destination))
             } catch {
                 completion(.failure(error))
             }
-            self?.task = nil
         }
         #endif
     }

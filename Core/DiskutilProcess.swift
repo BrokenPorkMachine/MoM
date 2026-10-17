@@ -2,6 +2,12 @@ import Foundation
 
 /// A narrowly scoped read-only `diskutil` executor. Never pass untrusted UI arguments.
 enum DiskutilProcess {
+    static func isApproved(_ arguments: [String]) -> Bool {
+        if arguments == ["list", "-plist"] || arguments == ["apfs", "list", "-plist"] { return true }
+        return arguments.count == 3 && arguments[0] == "info" && arguments[1] == "-plist" &&
+            arguments[2].range(of: #"^disk[0-9]+(s[0-9]+)*$"#, options: .regularExpression) != nil
+    }
+
     enum Failure: LocalizedError {
         case nonzeroExit(Int32), invalidPlist, tooMuchOutput, timedOut
         var errorDescription: String? {
@@ -15,8 +21,7 @@ enum DiskutilProcess {
     }
     static func propertyList(_ arguments: [String], timeout: TimeInterval = 15,
                              maximumOutputBytes: Int = 16 * 1024 * 1024) throws -> [String: Any] {
-        let allowed: [[String]] = [["list", "-plist"], ["apfs", "list", "-plist"]]
-        precondition(allowed.contains(arguments), "Only approved read-only diskutil subcommands are permitted")
+        precondition(isApproved(arguments), "Only approved read-only diskutil subcommands are permitted")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/diskutil")
         process.arguments = arguments
